@@ -112,14 +112,30 @@ create table if not exists public.notes (
   -- the LLM — never the account's whole note history. This is a
   -- dependency-free, free-tier-friendly alternative to a vector/embedding
   -- pipeline; see docs/ai-integration.md for the pgvector upgrade path.
-  search_vector      tsvector generated always as (
-                        setweight(to_tsvector('english'::regconfig, coalesce(title, '')), 'A') ||
-                        setweight(to_tsvector('english'::regconfig, coalesce(body, '')), 'B') ||
-                        setweight(to_tsvector('english'::regconfig, array_to_string(coalesce(tags, '{}'), ' ')), 'C')
-                      ) stored,
+  search_vector      tsvector,
   created_at         timestamptz not null default now(),
   updated_at         timestamptz not null default now()
 );
+
+-- Trigger to auto-populate search_vector (replaces PG14-style generated
+-- column — Supabase's PG15+ marks to_tsvector as STABLE, not IMMUTABLE,
+-- which makes generated columns illegal. A before-insert/update trigger
+-- achieves the same thing without the immutability constraint.)
+create or replace function public.notes_search_vector_trigger()
+returns trigger as $f$
+begin
+  new.search_vector :=
+    setweight(to_tsvector('english', coalesce(new.title, '')), 'A') ||
+    setweight(to_tsvector('english', coalesce(new.body, '')), 'B') ||
+    setweight(to_tsvector('english', array_to_string(coalesce(new.tags, '{}'), ' ')), 'C');
+  return new;
+end;
+$f$ language plpgsql;
+
+drop trigger if exists trg_notes_search_vector on public.notes;
+create trigger trg_notes_search_vector
+  before insert or update on public.notes
+  for each row execute function public.notes_search_vector_trigger();
 
 create index if not exists idx_notes_account on public.notes (account_id, updated_at desc);
 create index if not exists idx_notes_search_vector on public.notes using gin (search_vector);
