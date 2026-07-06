@@ -113,9 +113,9 @@ create table if not exists public.notes (
   -- dependency-free, free-tier-friendly alternative to a vector/embedding
   -- pipeline; see docs/ai-integration.md for the pgvector upgrade path.
   search_vector      tsvector generated always as (
-                        setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
-                        setweight(to_tsvector('english', coalesce(body, '')), 'B') ||
-                        setweight(to_tsvector('english', array_to_string(coalesce(tags, '{}'), ' ')), 'C')
+                        setweight(to_tsvector('english'::regconfig, coalesce(title, '')), 'A') ||
+                        setweight(to_tsvector('english'::regconfig, coalesce(body, '')), 'B') ||
+                        setweight(to_tsvector('english'::regconfig, array_to_string(coalesce(tags, '{}'), ' ')), 'C')
                       ) stored,
   created_at         timestamptz not null default now(),
   updated_at         timestamptz not null default now()
