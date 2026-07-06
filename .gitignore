@@ -6,3 +6,10 @@ coverage/
 !.env.example
 *.log
 .DS_Store
+*.tsbuildinfo
+.vscode/
+.idea/
+tmp/
+temp/
+*.swp
+*.swo
