@@ -661,6 +661,18 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
       }
     }
 
+    if (/^(so\s+)?what\s+(do|would|should)\s+(you\s+)?(call|address)\s+me/i.test(lower)) {
+      const notesResult = await listRecentNotes(accountId);
+      const bossNote = notesResult.ok && notesResult.data.find((n) => /is the boss/i.test(n.title));
+      if (bossNote) {
+        const name = bossNote.title.replace(/\s+is the boss/i, "").trim();
+        const answer = `I call you ${name}!`;
+        await recordExchange(accountId, "user", text);
+        await recordExchange(accountId, "assistant", answer);
+        return { kind: "text", text: answer };
+      }
+    }
+
     // Natural-language fallback: only reached when no rigid command
     // syntax above matched, and only when the account has explicitly
     // opted in. This never bypasses validation — every intent Groq
