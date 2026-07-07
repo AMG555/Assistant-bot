@@ -681,15 +681,19 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
             const chatIntent = recognizedIntents.find((i): i is { type: "chat"; text: string } => i.type === "chat");
             const toolIntents = recognizedIntents.filter((i) => i.type !== "chat");
 
-            for (const intent of toolIntents) {
-              await executeAiIntent(accountId, intent);
-            }
-
             const rawChatText = chatIntent?.text ?? "";
             const isToolDescription = /\b(save|saved|note from|your note|a note|task added|reminder set)\b/i.test(rawChatText) && toolIntents.length > 0;
-            const replyText = chatIntent && !isToolDescription
-              ? chatIntent.text
-              : (await Promise.all(toolIntents.map((i) => executeAiIntent(accountId, i)))).join("\n");
+
+            let replyText: string;
+            if (chatIntent && !isToolDescription) {
+              for (const intent of toolIntents) {
+                await executeAiIntent(accountId, intent);
+              }
+              replyText = chatIntent.text;
+            } else {
+              const results = await Promise.all(toolIntents.map((i) => executeAiIntent(accountId, i)));
+              replyText = results.join("\n");
+            }
 
             await recordExchange(accountId, "assistant", replyText);
             void maybeSummarizeOldConversation(accountId, await countExchanges(accountId));
