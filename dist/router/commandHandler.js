@@ -12,7 +12,7 @@ import { parseWhen, extractRecurrence, parseHourOfDay, parseRelativeDurationMs }
 import { checkRateLimit } from "../middleware/rateLimit.js";
 import { recordUndoableAction, takeUndoableAction } from "../lib/undoStore.js";
 import { recordExchange, getConversationHistory, countExchanges } from "../lib/conversationMemory.js";
-import { logError, logger } from "../lib/logger.js";
+import { logError } from "../lib/logger.js";
 import { isGroqConfigured, isNotionConfigured, isSemanticSearchConfigured, env } from "../config/env.js";
 import { interpretMessage, answerQuestionWithRag } from "../services/aiService.js";
 import { retrieveRelevantNotes } from "../services/ragService.js";
@@ -566,17 +566,27 @@ export async function handleCommand(cmd) {
             }
             return { kind: "text", text: "I don't have enough info in your notes to answer that." };
         }
-        logger.info({ context: "commandHandler", lower, text }, "boss_match_check");
         const bossMatch = lower.match(/^i\s+am\s+(.+?)(?:\s+your)?\s*boss$/);
-        logger.info({ context: "commandHandler", hasMatch: !!bossMatch, match: bossMatch?.[1] }, "boss_match_result");
         if (bossMatch) {
-            const name = bossMatch[1].trim();
+            const rawName = bossMatch[1].trim();
+            const name = rawName.charAt(0).toUpperCase() + rawName.slice(1);
             const noteTitle = `${name} is the boss`;
             const noteResult = await createNote(accountId, { title: noteTitle, body: "", tags: [] });
             if (noteResult.ok) {
                 void recordExchange(accountId, "user", text);
                 void recordExchange(accountId, "assistant", `Got it, ${name}!`);
                 return { kind: "text", text: `Got it, ${name}!` };
+            }
+        }
+        if (lower === "who is your boss" || lower === "whos your boss" || lower === "who's your boss") {
+            const notesResult = await listRecentNotes(accountId);
+            const bossNote = notesResult.ok && notesResult.data.find((n) => /is the boss/i.test(n.title));
+            if (bossNote) {
+                const name = bossNote.title.replace(/\s+is the boss/i, "").trim();
+                const answer = `You told me — ${name} is the boss!`;
+                await recordExchange(accountId, "user", text);
+                await recordExchange(accountId, "assistant", answer);
+                return { kind: "text", text: answer };
             }
         }
         // Natural-language fallback: only reached when no rigid command
