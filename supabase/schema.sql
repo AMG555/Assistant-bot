@@ -45,6 +45,10 @@ create table if not exists public.accounts (
   digest_enabled       boolean not null default false,
   digest_hour          int not null default 8 check (digest_hour between 0 and 23),
   last_digest_sent_date text,
+  -- Webhook inbox: a per-account secret for accepting external HTTP
+  -- requests (IFTTT, n8n, email forwarders, etc.) as notes. Generated
+  -- on first request via "webhook link" command. Null = not set up.
+  webhook_secret       text,
   created_at         timestamptz not null default now()
 );
 
@@ -100,12 +104,12 @@ create table if not exists public.notes (
   -- from re-importing a change WE just pushed (an infinite sync loop).
   notion_page_id          text,
   notion_last_synced_edit timestamptz,
-  -- Optional semantic-search vector (Jina embeddings, 768 dimensions —
+  -- Optional semantic-search vector (Jina embeddings, 256 dimensions —
   -- see docs/ai-integration.md). Stays null for every note unless
   -- JINA_API_KEY is configured; nothing reads or requires this column
   -- when the feature is off, so enabling/disabling it later is purely
   -- additive and never breaks existing notes.
-  embedding          vector(768),
+  embedding          vector(256),
   -- Generated tsvector column powers RAG-style retrieval for the AI
   -- assistant: we look up the few most relevant notes for THIS account
   -- only, via Postgres full-text search, and send only those snippets to
@@ -182,6 +186,13 @@ create table if not exists public.reminders (
   status             text not null default 'pending' check (status in ('pending', 'sent', 'failed', 'cancelled')),
   delivery_attempts  int not null default 0,
   last_error         text,
+  -- When true, the dispatcher re-sends this reminder every few minutes
+  -- until the user explicitly acknowledges it. Use for important/time-
+  -- sensitive alerts that must not be missed.
+  is_alarm           boolean not null default false,
+  -- Set by the dispatcher on each alarm delivery, used as a cooldown
+  -- guard so the same alarm isn't re-sent on every cron tick.
+  last_alarm_sent_at timestamptz,
   created_at         timestamptz not null default now()
 );
 
@@ -263,6 +274,23 @@ create index if not exists idx_activity_account_time
   on public.activity_log (account_id, occurred_at);
 
 -- ---------------------------------------------------------------------
+-- conversation_history: persistent per-account chat memory. Stores raw
+-- exchanges so the AI can see recent conversation context across cold
+-- starts. Old rows are periodically summarized into notes (see
+-- conversationSummaryService.ts) and then pruned to keep the table lean.
+-- ---------------------------------------------------------------------
+create table if not exists public.conversation_history (
+  id            uuid primary key default gen_random_uuid(),
+  account_id    uuid not null references public.accounts(id) on delete cascade,
+  role          text not null check (role in ('user', 'assistant')),
+  text          text not null,
+  created_at    timestamptz not null default now()
+);
+
+create index if not exists idx_conversation_history_account
+  on public.conversation_history (account_id, created_at desc);
+
+-- ---------------------------------------------------------------------
 -- RAG retrieval function: returns the top-N notes for ONE account,
 -- ranked by relevance to a query. The account_id filter is baked into
 -- the function body (not just passed as an application-side WHERE
@@ -301,7 +329,7 @@ $$;
 -- ---------------------------------------------------------------------
 create or replace function public.semantic_search_notes_for_account(
   p_account_id uuid,
-  p_query_embedding vector(768),
+  p_query_embedding vector(256),
   p_limit int default 5
 )
 returns table (
@@ -361,6 +389,7 @@ alter table public.activity_log        enable row level security;
 alter table public.oauth_states        enable row level security;
 alter table public.notion_connections  enable row level security;
 alter table public.notion_webhook_events enable row level security;
+alter table public.conversation_history   enable row level security;
 
 -- No policies are created for anon/authenticated roles yet — this means
 -- those roles get ZERO access by default (RLS fails closed), which is

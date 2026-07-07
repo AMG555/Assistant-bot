@@ -17,6 +17,7 @@ interface Bucket {
 }
 
 const buckets = new Map<string, Bucket>();
+let lock: Promise<void> = Promise.resolve();
 
 export function checkRateLimit(key: string, max: number, windowMs: number): boolean {
   const now = Date.now();
@@ -33,6 +34,10 @@ export function checkRateLimit(key: string, max: number, windowMs: number): bool
 
   existing.count += 1;
   return true;
+}
+
+export function resetRateLimit(key: string): void {
+  buckets.delete(key);
 }
 
 /** Express middleware factory for HTTP-triggered actions (e.g. a future

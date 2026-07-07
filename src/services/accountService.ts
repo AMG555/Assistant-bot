@@ -211,3 +211,52 @@ export async function consumeLinkCode(
     return { ok: false, error: "Could not link account", code: "internal" };
   }
 }
+
+/** Returns the existing webhook secret for an account, or generates one
+ * if none exists yet. The secret is a random hex string stored in
+ * accounts.webhook_secret and presented by the caller as the
+ * X-Webhook-Secret header when POSTing to /webhooks/incoming/:accountId. */
+export async function getOrCreateWebhookSecret(accountId: string): Promise<ServiceResult<{ secret: string; url: string }>> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("accounts")
+      .select("webhook_secret")
+      .eq("id", accountId)
+      .single();
+    if (error) throw error;
+
+    let secret = data?.webhook_secret;
+    if (!secret) {
+      secret = crypto.randomBytes(24).toString("hex");
+      const { error: updateError } = await supabaseAdmin
+        .from("accounts")
+        .update({ webhook_secret: secret })
+        .eq("id", accountId);
+      if (updateError) throw updateError;
+    }
+
+    const baseUrl = env.PUBLIC_BASE_URL.replace(/\/$/, "");
+    return { ok: true, data: { secret, url: `${baseUrl}/webhooks/incoming/${accountId}` } };
+  } catch (err) {
+    logError("getOrCreateWebhookSecret", err, { accountId });
+    return { ok: false, error: "Could not create webhook secret", code: "internal" };
+  }
+}
+
+/** Validates a webhook secret for an account. Returns true if the secret
+ * matches what's stored. Timing-safe comparison to prevent side-channel
+ * attacks (same pattern as link code verification). */
+export async function validateWebhookSecret(accountId: string, candidate: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("accounts")
+      .select("webhook_secret")
+      .eq("id", accountId)
+      .single();
+    if (error || !data?.webhook_secret) return false;
+    return crypto.timingSafeEqual(Buffer.from(data.webhook_secret), Buffer.from(candidate));
+  } catch (err) {
+    logError("validateWebhookSecret", err, { accountId });
+    return false;
+  }
+}

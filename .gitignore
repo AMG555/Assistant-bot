@@ -1,5 +1,4 @@
 node_modules/
-dist/
 coverage/
 .env
 .env.*
@@ -13,3 +12,6 @@ tmp/
 temp/
 *.swp
 *.swo
+
+# Agent/tooling config — not relevant to the project itself
+opencode.json

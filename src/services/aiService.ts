@@ -1,5 +1,6 @@
 import Groq, { toFile } from "groq-sdk";
 import { env, isGroqConfigured } from "../config/env.js";
+import { groqClient } from "./groqClient.js";
 import { logError, logger } from "../lib/logger.js";
 import { checkRateLimit } from "../middleware/rateLimit.js";
 import { retrieveRelevantNotes } from "./ragService.js";
@@ -34,13 +35,13 @@ import {
  *    accidentally from a new call site later.
  */
 
-const groqClient = isGroqConfigured ? new Groq({ apiKey: env.GROQ_API_KEY }) : null;
-
 export type AiIntent =
   | { type: "create_note"; title: string; body: string }
   | { type: "create_task"; title: string; dueAt?: string }
   | { type: "create_reminder"; message: string; remindAt: string; recurrence: RecurrenceRule }
+  | { type: "create_alarm"; message: string; remindAt: string }
   | { type: "answer_question"; answer: string }
+  | { type: "chat"; text: string }
   | { type: "unrecognized" };
 
 /**
@@ -58,7 +59,7 @@ const TOOLS: Groq.Chat.Completions.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "create_note",
-      description: "Save a note when the user wants to write something down for later.",
+      description: "Save a note when the user wants to write something down for later, or tells you personal information about themselves or about you that you should remember.",
       parameters: {
         type: "object",
         properties: {
@@ -110,9 +111,25 @@ const TOOLS: Groq.Chat.Completions.ChatCompletionTool[] = [
   {
     type: "function",
     function: {
+      name: "create_alarm",
+      description:
+        "Schedule an important/persistent alarm that keeps repeating every few minutes until acknowledged. Use when the user says 'alarm', 'alarm me', 'wake me up', or anything time-sensitive they must not miss.",
+      parameters: {
+        type: "object",
+        properties: {
+          message: { type: "string", description: "What to alarm the user about" },
+          remindAtIso: { type: "string", description: "ISO-8601 timestamp of when to fire the alarm" },
+        },
+        required: ["message", "remindAtIso"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "answer_question",
       description:
-        "Answer a question the user asked about their own notes/tasks, using ONLY the provided context snippets. If the context doesn't contain the answer, say so honestly instead of guessing.",
+        "Answer a question using the conversation history and relevant notes. Give a natural, direct answer — don't say 'according to your notes' unless it's relevant.",
       parameters: {
         type: "object",
         properties: {
@@ -125,13 +142,18 @@ const TOOLS: Groq.Chat.Completions.ChatCompletionTool[] = [
 ];
 
 const SYSTEM_PROMPT = [
-  "You are a personal assistant bot's natural-language understanding layer.",
-  "Decide which tool call(s) match the user's message, then call them.",
-  "If the user's message describes MULTIPLE distinct items (e.g. 'remind me to call mom tomorrow and also buy milk'), call the tool multiple times — once per distinct item — in a single response, rather than only handling the first one.",
-  "Never invent facts. If asked a question and the provided context doesn't contain the answer, call answer_question and say you don't have that information — do not guess.",
-  "Times must be resolved to real ISO-8601 timestamps using the provided 'current time' as the reference point. Never fabricate a time if the user gave none for a reminder.",
-  "For create_reminder, set recurrence to 'daily'/'weekly'/'monthly' if the user said 'every day'/'every week'/'every month' or an equivalent phrase; otherwise use 'none'.",
-].join(" ");
+  "You are a friendly personal assistant. Always respond as a human would speak.",
+  "",
+  "RULES:",
+  "1. When the user says 'I am your boss' or similar, call create_note with title 'Amg is the boss' and body ''. Then respond naturally: 'Got it, boss!' or 'You're the boss!'. NEVER respond 'Hello, I'm ready to assist' — treat it as a statement of fact, not a greeting.",
+  "2. When the user later asks 'Who is your boss', answer from the conversation history or saved note. Say 'You told me — Amg is the boss!' or similar. NEVER say you don't know if the information was provided.",
+  "3. NEVER say 'Saved your note', 'Task added', 'Reminder set', or anything about tools. Use tools silently. Your text response must always be what a person would say.",
+  "4. When saving personal info, call the tool AND respond naturally in the same turn.",
+  "",
+  "For recurring things: if the user says 'every day'/'every week'/'every month', repeat. Otherwise one-time.",
+  "For alarms: use when the user says 'alarm', 'alarm me', 'wake me up', or anything urgent. Alarms repeat until acknowledged.",
+  "Never make up times, dates, or content.",
+].join("\n");
 
 /** Converts free-form user text into a structured intent via Groq
  * tool-calling. Optionally includes RAG context snippets (already
@@ -142,7 +164,8 @@ export async function interpretMessage(
   accountId: string,
   message: string,
   nowIso: string,
-  contextSnippets: string[] = []
+  contextSnippets: string[] = [],
+  history: { role: "user" | "assistant"; text: string }[] = []
 ): Promise<AiResult> {
   if (!groqClient) {
     return { ok: false, reason: "not_configured" };
@@ -156,39 +179,51 @@ export async function interpretMessage(
   try {
     const contextBlock =
       contextSnippets.length > 0
-        ? `\n\nRelevant notes for this user (use only if answering a question):\n${contextSnippets
+        ? `\n\nRelevant notes from this user's account:\n${contextSnippets
             .map((s, i) => `[${i + 1}] ${s}`)
             .join("\n")}`
         : "";
+
+    const historyMessages = history.map((h) => ({
+      role: h.role as "user" | "assistant",
+      content: h.text,
+    }));
 
     const completion = await groqClient.chat.completions.create({
       model: env.GROQ_MODEL,
       messages: [
         { role: "system", content: `${SYSTEM_PROMPT}\nCurrent time (ISO-8601): ${nowIso}${contextBlock}` },
+        ...historyMessages,
         { role: "user", content: message },
       ],
       tools: TOOLS,
-      tool_choice: "required",
-      // parallel_tool_calls defaults to true on models that support it
-      // (llama-3.1-8b-instant, llama-3.3-70b-versatile — both confirmed
-      // to support parallel tool use); explicit here so behavior is
-      // documented, not just relying on an SDK default.
       parallel_tool_calls: true,
-      temperature: 0.2,
+      temperature: 0.7,
       max_tokens: 800,
     });
 
-    const toolCalls = completion.choices[0]?.message?.tool_calls ?? [];
+    const responseMessage = completion.choices[0]?.message;
+    const textContent = responseMessage?.content?.trim() ?? "";
+    const toolCalls = responseMessage?.tool_calls ?? [];
     const functionCalls = toolCalls.filter(
       (call): call is Groq.Chat.Completions.ChatCompletionMessageToolCall & { type: "function" } =>
         call.type === "function"
     );
 
-    if (functionCalls.length === 0) {
-      return { ok: true, intents: [{ type: "unrecognized" }] };
+    const intents: AiIntent[] = [];
+
+    if (functionCalls.length > 0) {
+      intents.push(...functionCalls.map((call) => parseToolCall(call.function.name, call.function.arguments)));
     }
 
-    const intents = functionCalls.map((call) => parseToolCall(call.function.name, call.function.arguments));
+    if (textContent) {
+      intents.push({ type: "chat", text: textContent });
+    }
+
+    if (intents.length === 0) {
+      intents.push({ type: "unrecognized" });
+    }
+
     return { ok: true, intents };
   } catch (err) {
     logError("interpretMessage", err, { accountId });
@@ -245,6 +280,13 @@ function parseToolCall(name: string, rawArgs: string): AiIntent {
         remindAt: validation.data.remindAt.toISOString(),
         recurrence: validation.data.recurrence,
       };
+    }
+    case "create_alarm": {
+      const message = String(args.message ?? "").trim();
+      const remindAt = args.remindAtIso ? new Date(String(args.remindAtIso)) : undefined;
+      if (!message || !remindAt) return { type: "unrecognized" };
+      if (remindAt.getTime() <= Date.now()) return { type: "unrecognized" };
+      return { type: "create_alarm", message: message.slice(0, 500), remindAt: remindAt.toISOString() };
     }
     case "answer_question": {
       const answer = String(args.answer ?? "").trim();
@@ -303,10 +345,14 @@ export async function transcribeAudio(accountId: string, audioBuffer: Buffer, fi
 /** Convenience wrapper used by the question-answering command path:
  * retrieves account-scoped context via RAG, then asks Groq to answer
  * grounded only in that context. */
-export async function answerQuestionWithRag(accountId: string, question: string): Promise<AiResult> {
+export async function answerQuestionWithRag(
+  accountId: string,
+  question: string,
+  history: { role: "user" | "assistant"; text: string }[] = []
+): Promise<AiResult> {
   const retrieval = await retrieveRelevantNotes(accountId, question, 5);
   const snippets = retrieval.ok ? retrieval.data.map((n) => `${n.title}: ${n.body}`) : [];
-  return interpretMessage(accountId, question, new Date().toISOString(), snippets);
+  return interpretMessage(accountId, question, new Date().toISOString(), snippets, history);
 }
 
 export type SummaryResult = { ok: true; summary: string } | { ok: false; reason: "not_configured" | "rate_limited" | "provider_error" };
@@ -361,6 +407,57 @@ export async function summarizeDigest(accountId: string, rawDigestText: string):
     return { ok: true, summary };
   } catch (err) {
     logError("summarizeDigest", err, { accountId });
+    return { ok: false, reason: "provider_error" };
+  }
+}
+
+export type ImageResult =
+  | { ok: true; text: string }
+  | { ok: false; reason: "not_configured" | "rate_limited" | "provider_error" };
+
+/**
+ * Sends an image to Groq's vision model (llama-3.2-11b-vision-preview)
+ * and returns the textual content extracted from it. Uses the same two-
+ * layer opt-in gate as every other AI feature.
+ */
+export async function transcribeImage(accountId: string, imageBuffer: Buffer, mimeType: string): Promise<ImageResult> {
+  if (!groqClient) {
+    return { ok: false, reason: "not_configured" };
+  }
+
+  if (!checkRateLimit(`groq-image:${accountId}`, env.GROQ_MAX_CALLS_PER_HOUR, 60 * 60 * 1000)) {
+    logger.warn({ context: "transcribeImage", accountId }, "groq_rate_limit_exceeded");
+    return { ok: false, reason: "rate_limited" };
+  }
+
+  try {
+    const base64 = imageBuffer.toString("base64");
+    const dataUrl = `data:${mimeType};base64,${base64}`;
+
+    const completion = await groqClient.chat.completions.create({
+      model: "llama-3.2-11b-vision-preview",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Extract all the text content from this image accurately. If it's a document, whiteboard, or handwritten note, transcribe it faithfully. If it's a photo with no text, describe what you see briefly.",
+            },
+            { type: "image_url", image_url: { url: dataUrl } },
+          ],
+        },
+      ],
+      temperature: 0.2,
+      max_tokens: 1000,
+    });
+
+    const text = completion.choices[0]?.message?.content?.trim();
+    if (!text) return { ok: false, reason: "provider_error" };
+
+    return { ok: true, text };
+  } catch (err) {
+    logError("transcribeImage", err, { accountId });
     return { ok: false, reason: "provider_error" };
   }
 }

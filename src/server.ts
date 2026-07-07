@@ -11,6 +11,8 @@ import { cronRouter } from "./routes/cronDispatchRoute.js";
 import { digestRouter } from "./routes/digestDispatchRoute.js";
 import { notionOAuthRouter } from "./routes/notionOAuthRoute.js";
 import { notionWebhookRouter } from "./routes/notionWebhookRoute.js";
+import { webhookIncomingRouter } from "./routes/webhookIncomingRoute.js";
+import { runMigrations } from "./lib/migrate.js";
 
 const app = express();
 
@@ -68,6 +70,10 @@ app.get("/healthz", (_req: Request, res: Response) => {
   res.status(200).json({ status: "ok", uptimeSeconds: Math.round(process.uptime()) });
 });
 
+app.get("/", (_req: Request, res: Response) => {
+  res.status(200).json({ status: "ok", service: "personal-assistant-bot" });
+});
+
 /**
  * Dedicated keep-alive target for an external uptime monitor (e.g.
  * UptimeRobot's free HTTP monitor, checked every 5 minutes). Kept
@@ -95,6 +101,7 @@ app.use("/", cronRouter);
 app.use("/", digestRouter);
 app.use("/", notionOAuthRouter);
 app.use("/", notionWebhookRouter);
+app.use("/", webhookIncomingRouter);
 
 // 404 fallback — explicit, not silent.
 app.use((req: Request, res: Response) => {
@@ -126,8 +133,9 @@ process.on("uncaughtException", (err) => {
   process.exit(1);
 });
 
-const server = app.listen(env.PORT, () => {
+const server = app.listen(env.PORT, async () => {
   logger.info({ port: env.PORT, env: env.NODE_ENV }, "server_started");
+  runMigrations().catch(() => {});
 });
 
 function shutdown(signal: string) {

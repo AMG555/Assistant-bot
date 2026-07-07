@@ -11,6 +11,7 @@ export interface DueReminder {
   remindAt: string;
   deliveryAttempts: number;
   recurrenceRule: RecurrenceRule;
+  isAlarm: boolean;
 }
 
 export async function createReminder(
@@ -25,12 +26,13 @@ export async function createReminder(
         message: input.message,
         remind_at: input.remindAt.toISOString(),
         recurrence_rule: input.recurrence,
+        is_alarm: input.isAlarm ?? false,
       })
       .select("id")
       .single();
     if (error) throw error;
 
-    await supabaseAdmin.from("activity_log").insert({ account_id: accountId, kind: "reminder_created" });
+    void supabaseAdmin.from("activity_log").insert({ account_id: accountId, kind: "reminder_created" });
 
     return { ok: true, data: { id: data.id } };
   } catch (err) {
@@ -40,19 +42,25 @@ export async function createReminder(
 }
 
 const MAX_DELIVERY_ATTEMPTS = 3;
+const ALARM_REDELIVER_INTERVAL_MS = 5 * 60 * 1000;
 
 /** Called only by the internal cron dispatch route — never by a bot
  * command directly. Pulls all reminders whose time has passed and are
  * still pending, using a small attempt cap so a permanently-broken
- * delivery target doesn't retry forever. */
+ * delivery target doesn't retry forever. Also returns alarm reminders
+ * (is_alarm = true) whose last delivery was more than 5 minutes ago,
+ * so they keep firing until acknowledged. */
 export async function fetchDueReminders(limit = 50): Promise<ServiceResult<DueReminder[]>> {
   try {
+    const fiveMinAgo = new Date(Date.now() - ALARM_REDELIVER_INTERVAL_MS).toISOString();
     const { data, error } = await supabaseAdmin
       .from("reminders")
-      .select("id, account_id, message, remind_at, delivery_attempts, recurrence_rule")
+      .select("id, account_id, message, remind_at, delivery_attempts, recurrence_rule, is_alarm")
       .eq("status", "pending")
-      .lte("remind_at", new Date().toISOString())
-      .lt("delivery_attempts", MAX_DELIVERY_ATTEMPTS)
+      .or(
+        `and(remind_at.lte.${new Date().toISOString()},delivery_attempts.lt.${MAX_DELIVERY_ATTEMPTS}),` +
+        `and(is_alarm.eq.true,remind_at.lte.${new Date().toISOString()},or(last_alarm_sent_at.is.null,last_alarm_sent_at.lte.${fiveMinAgo}))`
+      )
       .limit(limit);
     if (error) throw error;
 
@@ -65,6 +73,7 @@ export async function fetchDueReminders(limit = 50): Promise<ServiceResult<DueRe
         remindAt: r.remind_at,
         deliveryAttempts: r.delivery_attempts,
         recurrenceRule: (r.recurrence_rule ?? "none") as RecurrenceRule,
+        isAlarm: r.is_alarm ?? false,
       })),
     };
   } catch (err) {
@@ -88,7 +97,7 @@ export async function markReminderSent(
 ): Promise<void> {
   try {
     await supabaseAdmin.from("reminders").update({ status: "sent" }).eq("id", reminderId);
-    await supabaseAdmin.from("activity_log").insert({ account_id: accountId, kind: "reminder_sent" });
+    void supabaseAdmin.from("activity_log").insert({ account_id: accountId, kind: "reminder_sent" });
 
     const next = computeNextOccurrence(recurrenceRule, new Date(remindAtIso));
     if (next) {
@@ -98,7 +107,9 @@ export async function markReminderSent(
         remind_at: next.toISOString(),
         recurrence_rule: recurrenceRule,
       });
-      if (error) throw error;
+      if (error) {
+        logError("markReminderSent.recurrence", error, { reminderId, message });
+      }
     }
   } catch (err) {
     logError("markReminderSent", err, { reminderId });
@@ -219,5 +230,36 @@ export async function markReminderFailedAttempt(reminderId: string, attempts: nu
       .eq("id", reminderId);
   } catch (err) {
     logError("markReminderFailedAttempt", err, { reminderId });
+  }
+}
+
+/** Records a successful alarm delivery so the cron dispatcher knows not
+ * to re-send it immediately (uses last_alarm_sent_at as a cooldown). */
+export async function markAlarmDelivered(reminderId: string): Promise<void> {
+  try {
+    await supabaseAdmin
+      .from("reminders")
+      .update({ last_alarm_sent_at: new Date().toISOString() })
+      .eq("id", reminderId);
+  } catch (err) {
+    logError("markAlarmDelivered", err, { reminderId });
+  }
+}
+
+/** Acknowledges an alarm reminder, marking it as sent so it stops
+ * re-delivering. Scoped by account_id. */
+export async function acknowledgeReminder(accountId: string, reminderId: string): Promise<ServiceResult<null>> {
+  try {
+    const { error } = await supabaseAdmin
+      .from("reminders")
+      .update({ status: "sent", delivery_attempts: 0 })
+      .eq("id", reminderId)
+      .eq("account_id", accountId)
+      .eq("is_alarm", true);
+    if (error) throw error;
+    return { ok: true, data: null };
+  } catch (err) {
+    logError("acknowledgeReminder", err, { accountId, reminderId });
+    return { ok: false, error: "Could not acknowledge that alarm", code: "internal" };
   }
 }

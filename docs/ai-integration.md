@@ -143,7 +143,7 @@ restriction — see the "Other providers" note below).
    so it's gated behind the **same `ai on` opt-in** as every other AI
    feature — a user who never opted into AI must never have note content
    sent anywhere just because the operator configured a Jina key.
-3. `notes.embedding vector(768)` stores the vector; a Postgres function
+3. `notes.embedding vector(256)` stores the vector; a Postgres function
    (`semantic_search_notes_for_account`) ranks matches by cosine
    distance, with the `account_id` filter baked into the SQL itself —
    same isolation discipline as the full-text search function it sits
@@ -179,24 +179,6 @@ a small, predictable amount than deal with Jina's license terms.
   unrecognized) for a single message describing multiple items.
 
 ## Voice transcription security notes
-- Voice audio is downloaded server-side only (Telegram's `getFile` +
-  file API, or WhatsApp's Cloud API media lookup + download, both using
-  server-held bot tokens — never exposed to any client).
-- Transcription uses the same per-account rate limit
-  (`GROQ_MAX_CALLS_PER_HOUR`) as text-based AI, tracked under a distinct
-  key (`groq-audio:<accountId>`) so heavy voice usage and heavy text
-  usage don't silently share one budget in a way that's hard to reason
-  about.
-- If a user hasn't opted in, the bot explicitly asks them to run `ai on`
-  or type their message instead — it never transcribes "just this once"
-  without consent.
-- The voice-note handlers resolve the account once (to check the AI
-  opt-in gate before transcribing) and pass that resolved id through to
-  `handleCommand` via `IncomingCommand.resolvedAccountId`, instead of
-  resolving it a second time. This avoids a redundant Supabase round
-  trip per voice message — worth caring about on Render's free tier,
-  where every extra query adds latency on a shared 0.1 CPU instance.
-
 - Voice audio is downloaded server-side only (Telegram's `getFile` +
   file API, or WhatsApp's Cloud API media lookup + download, both using
   server-held bot tokens — never exposed to any client).

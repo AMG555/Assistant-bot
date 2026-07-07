@@ -28,19 +28,17 @@ notionWebhookRouter.post("/webhooks/notion", verifyNotionWebhook, async (req, re
     return res.status(200).json({ received: true });
   }
 
-  // Acknowledge immediately — same pattern as every other webhook
-  // adapter in this codebase: Notion should not be kept waiting on our
-  // downstream Supabase/Notion-API round trips.
-  res.status(200).json({ received: true });
-
   const eventId = body.id;
   const workspaceId = body.workspace_id;
   const pageId = body.data?.page_id;
 
   if (!eventId || !workspaceId || !pageId) {
     logger.warn({ context: "notionWebhookRoute" }, "malformed_event_payload");
-    return;
+    return res.status(200).json({ received: true });
   }
+
+  // Acknowledge after validation — quick check only, no DB/API calls.
+  res.status(200).json({ received: true });
 
   // Only page-shaped events with a page_id are relevant to note sync;
   // other event types (comments, database schema changes, etc.) are

@@ -46,6 +46,10 @@ process.env.GROQ_API_KEY ??= "";
 // real secret and must never be reused outside this test file.
 process.env.NOTION_TOKEN_ENCRYPTION_KEY ??=
   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+// Deliberately left blank — tests confirm fail-closed behavior.
+process.env.JINA_API_KEY ??= "";
+process.env.JINA_EMBEDDING_DIMENSIONS ??= "256";
+
 process.env.NOTION_OAUTH_CLIENT_ID ??= "";
 process.env.NOTION_OAUTH_CLIENT_SECRET ??= "";
 process.env.NOTION_WEBHOOK_SECRET ??= "";

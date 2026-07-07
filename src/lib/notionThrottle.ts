@@ -16,14 +16,20 @@ import { env } from "../config/env.js";
  * budget to itself.
  */
 let nextAvailableSlotMs = 0;
+let lock: Promise<void> = Promise.resolve();
 
 export async function throttleNotionCall<T>(fn: () => Promise<T>): Promise<T> {
   const minIntervalMs = 1000 / env.NOTION_MAX_REQUESTS_PER_SECOND;
-  const now = Date.now();
-  const scheduledAt = Math.max(now, nextAvailableSlotMs);
-  nextAvailableSlotMs = scheduledAt + minIntervalMs;
 
-  const waitMs = scheduledAt - now;
+  let scheduledAt: number;
+  lock = lock.then(() => {
+    const now = Date.now();
+    scheduledAt = Math.max(now, nextAvailableSlotMs);
+    nextAvailableSlotMs = scheduledAt + minIntervalMs;
+  });
+  await lock;
+
+  const waitMs = scheduledAt! - Date.now();
   if (waitMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, waitMs));
   }

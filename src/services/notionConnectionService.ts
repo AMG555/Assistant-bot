@@ -5,8 +5,6 @@ import { encryptSecret, decryptSecret } from "../lib/tokenCrypto.js";
 import { env } from "../config/env.js";
 import type { ServiceResult } from "./accountService.js";
 
-const OAUTH_STATE_TTL_MINUTES = 10;
-
 function hashState(state: string): string {
   return crypto.createHash("sha256").update(state).digest("hex");
 }
@@ -19,7 +17,7 @@ export async function issueOAuthState(accountId: string): Promise<ServiceResult<
   try {
     const state = crypto.randomBytes(24).toString("hex");
     const stateHash = hashState(state);
-    const expiresAt = new Date(Date.now() + OAUTH_STATE_TTL_MINUTES * 60_000).toISOString();
+    const expiresAt = new Date(Date.now() + env.OAUTH_STATE_TTL_MINUTES * 60_000).toISOString();
 
     const { error } = await supabaseAdmin.from("oauth_states").insert({
       account_id: accountId,

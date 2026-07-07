@@ -1,8 +1,8 @@
+import { env } from "../config/env.js";
 import { throttleNotionCall } from "../lib/notionThrottle.js";
 import { logError } from "../lib/logger.js";
 
 const NOTION_API_BASE = "https://api.notion.com/v1";
-const NOTION_VERSION = "2025-09-03";
 
 /** Builds the browser URL we hand the user to approve access. Chat bots
  * can't natively perform a redirect themselves — this is the bridge:
@@ -44,7 +44,7 @@ async function notionRequest<T>(
         ...init,
         headers: {
           Authorization: `Bearer ${accessToken}`,
-          "Notion-Version": NOTION_VERSION,
+          "Notion-Version": env.NOTION_API_VERSION,
           "Content-Type": "application/json",
           ...init.headers,
         },

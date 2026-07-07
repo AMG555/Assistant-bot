@@ -31,6 +31,7 @@ export const createReminderSchema = z.object({
     .date()
     .refine((d) => d.getTime() > Date.now(), "Reminder time must be in the future"),
   recurrence: z.enum(["none", "daily", "weekly", "monthly"]).default("none"),
+  isAlarm: z.boolean().optional().default(false),
 });
 export type CreateReminderInput = z.infer<typeof createReminderSchema>;
 

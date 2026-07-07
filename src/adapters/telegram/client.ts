@@ -21,8 +21,10 @@ async function callTelegram(method: string, body: Record<string, unknown>): Prom
   }
 }
 
-export async function sendTelegramMessage(chatId: string | number, text: string): Promise<boolean> {
-  return callTelegram("sendMessage", { chat_id: chatId, text, disable_web_page_preview: true });
+export async function sendTelegramMessage(chatId: string | number, text: string, parseMode?: "HTML" | "Markdown"): Promise<boolean> {
+  const body: Record<string, unknown> = { chat_id: chatId, text, disable_web_page_preview: true };
+  if (parseMode) body.parse_mode = parseMode;
+  return callTelegram("sendMessage", body);
 }
 
 /** Resolves a Telegram file_id into a downloadable Buffer. Telegram's
