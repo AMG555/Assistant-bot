@@ -1,4 +1,15 @@
-FROM node:20-slim
+FROM node:20-slim AS builder
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY tsconfig.json ./
+COPY src ./src
+RUN npm run build
+
+FROM node:20-slim AS runtime
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -14,7 +25,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
-COPY dist ./dist
+COPY --from=builder /app/dist ./dist
 
 ENV NODE_ENV=production
 EXPOSE 10000
