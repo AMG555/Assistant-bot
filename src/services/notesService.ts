@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "../lib/supabase.js";
 import { logError } from "../lib/logger.js";
+import { fireEvent } from "../lib/eventBus.js";
 import type { CreateNoteInput } from "../validation/schemas.js";
 import type { ServiceResult } from "./accountService.js";
 
@@ -21,6 +22,7 @@ export async function createNote(
     if (error) throw error;
 
     await supabaseAdmin.from("activity_log").insert({ account_id: accountId, kind: "note_created" });
+    void fireEvent(accountId, "note_created", { title: input.title, body: input.body });
 
     return { ok: true, data: { id: data.id } };
   } catch (err) {

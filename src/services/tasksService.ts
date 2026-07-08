@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "../lib/supabase.js";
 import { logError } from "../lib/logger.js";
+import { fireEvent } from "../lib/eventBus.js";
 import type { CreateTaskInput } from "../validation/schemas.js";
 import type { ServiceResult } from "./accountService.js";
 
@@ -21,6 +22,7 @@ export async function createTask(
     if (error) throw error;
 
     await supabaseAdmin.from("activity_log").insert({ account_id: accountId, kind: "task_created" });
+    void fireEvent(accountId, "task_created", { title: input.title, dueAt: input.dueAt?.toISOString() });
 
     return { ok: true, data: { id: data.id } };
   } catch (err) {
@@ -35,13 +37,14 @@ export async function completeTask(accountId: string, taskId: string): Promise<S
       .from("tasks")
       .update({ completed_at: new Date().toISOString() })
       .eq("id", taskId)
-      .eq("account_id", accountId) // enforce ownership even though service role bypasses RLS
-      .select("id")
+      .eq("account_id", accountId)
+      .select("id, title")
       .maybeSingle();
     if (error) throw error;
     if (!data) return { ok: false, error: "Task not found", code: "not_found" };
 
     await supabaseAdmin.from("activity_log").insert({ account_id: accountId, kind: "task_completed" });
+    void fireEvent(accountId, "task_completed", { taskId: data.id, title: data.title });
 
     return { ok: true, data: { id: data.id } };
   } catch (err) {

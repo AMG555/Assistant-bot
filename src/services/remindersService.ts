@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "../lib/supabase.js";
 import { logError } from "../lib/logger.js";
+import { fireEvent } from "../lib/eventBus.js";
 import { computeNextOccurrence, type RecurrenceRule } from "../lib/parseWhen.js";
 import type { CreateReminderInput } from "../validation/schemas.js";
 import type { ServiceResult } from "./accountService.js";
@@ -35,6 +36,12 @@ export async function createReminder(
     if (error) throw error;
 
     void supabaseAdmin.from("activity_log").insert({ account_id: accountId, kind: "reminder_created" });
+    void fireEvent(accountId, "reminder_created", {
+      message: input.message,
+      remindAt: input.remindAt.toISOString(),
+      recurrence: input.recurrence,
+      isAlarm: input.isAlarm,
+    });
 
     return { ok: true, data: { id: data.id } };
   } catch (err) {
@@ -131,6 +138,7 @@ export async function markReminderSent(
   try {
     await supabaseAdmin.from("reminders").update({ status: "sent" }).eq("id", reminderId);
     void supabaseAdmin.from("activity_log").insert({ account_id: accountId, kind: "reminder_sent" });
+    void fireEvent(accountId, "reminder_sent", { message, recurrenceRule });
 
     const next = computeNextOccurrence(recurrenceRule, new Date(remindAtIso));
     if (next) {

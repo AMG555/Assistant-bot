@@ -5,6 +5,7 @@ import { deliverToAccount } from "../lib/deliverToAccount.js";
 import { isAiEnabledForAccount } from "../services/accountService.js";
 import { summarizeDigest } from "../services/aiService.js";
 import { isGroqConfigured } from "../config/env.js";
+import { fireEvent } from "../lib/eventBus.js";
 import { logError, logger } from "../lib/logger.js";
 
 export const digestRouter = Router();
@@ -64,6 +65,12 @@ digestRouter.post("/internal/cron/digest", verifyCronSecret, async (_req, res) =
       const bulletMessage = formatDigestMessage(contentResult.data);
       const message = await maybeSummarizeWithAi(account.accountId, bulletMessage);
       const delivered = await deliverToAccount(account.accountId, message);
+
+      void fireEvent(account.accountId, "digest_sent", {
+        tasksDue: contentResult.data.tasksDueTodayOrOverdue.length,
+        reminders: contentResult.data.remindersToday.length,
+        notes: contentResult.data.recentNotes.length,
+      });
 
       // Mark as sent regardless of delivery success: a failed delivery
       // here almost always means "no reachable platform identity",
