@@ -19,15 +19,17 @@ export async function createReminder(
   input: CreateReminderInput
 ): Promise<ServiceResult<{ id: string }>> {
   try {
+    const insertFields: Record<string, unknown> = {
+      account_id: accountId,
+      message: input.message,
+      remind_at: input.remindAt.toISOString(),
+      recurrence_rule: input.recurrence,
+    };
+    if (input.isAlarm) insertFields.is_alarm = true;
+
     const { data, error } = await supabaseAdmin
       .from("reminders")
-      .insert({
-        account_id: accountId,
-        message: input.message,
-        remind_at: input.remindAt.toISOString(),
-        recurrence_rule: input.recurrence,
-        is_alarm: input.isAlarm ?? false,
-      })
+      .insert(insertFields)
       .select("id")
       .single();
     if (error) throw error;
