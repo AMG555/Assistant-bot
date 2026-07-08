@@ -69,13 +69,18 @@ Concretely:
      account-level gate also covers digest summarization and note
      embedding (see below) — one opt-in covers every AI-adjacent feature
      in this codebase, not a separate toggle per feature.
-4. **Hard fallback, never a hang or crash.** If Groq times out, errors,
-   or an account hasn't opted in, `interpretMessage` returns a typed
-   failure and the bot falls back to the existing rule-based command
-   parser (`commandHandler`'s explicit `note/task/remind me/...` checks
-   still run first, before AI is ever consulted). The same is true for
-   digest summarization (falls back to the plain bullet list) and
-   semantic search (falls back to full-text search).
+4. **Bidirectional fallback, never a hang or crash.** The rigid
+   command parsers (`note/task/remind me/...`) run first. If they
+   succeed, the reply is instant with no AI call. If they fail to
+   parse (e.g. "remind me in an hour" — the rigid parser only
+   understands `5 minutes`, `2h`, `9am`, not "an hour" or "tomorrow"),
+   they fall through to Groq's NL interpretation instead of returning
+   a confusing error. Conversely, if Groq times out, errors, or the
+   account hasn't opted in, the rigid parsers still handle every
+   command they can — the AI layer is additive, never a hard
+   dependency. The same bidirectional fallback applies to digest
+   summarization (falls back to the plain bullet list) and semantic
+   search (falls back to full-text search).
 5. **Per-account rate limiting on AI calls specifically**
    (`GROQ_MAX_CALLS_PER_HOUR`, default 30/hour), separate from the
    general chat rate limit — LLM calls cost real money per request,

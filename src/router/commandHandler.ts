@@ -258,19 +258,28 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
       const raw = text.slice(5);
       const byMatch = raw.match(/\bby\s+(.+)$/i);
       const title = byMatch ? raw.slice(0, byMatch.index).trim() : raw.trim();
-      const dueAt = byMatch ? parseWhen(byMatch[1]!.trim(), await getAccountTimeZone(accountId)) : undefined;
+      let dueAt: Date | undefined;
 
-      const validation = safeValidate(createTaskSchema, {
-        title,
-        dueAt: dueAt ?? undefined,
-        priority: "normal",
-      });
-      if (!validation.ok) return { kind: "text", text: `Hmm, couldn't save that task: ${validation.error}` };
+      if (byMatch) {
+        const parsed = parseWhen(byMatch[1]!.trim(), await getAccountTimeZone(accountId));
+        if (parsed) dueAt = parsed;
+        // if byMatch found but parse failed, fall through to NL
+      }
 
-      const result = await createTask(accountId, validation.data);
-      if (!result.ok) return { kind: "text", text: `⚠ ${result.error}` };
-      recordUndoableAction(accountId, { kind: "delete_task", taskId: result.data.id });
-      return { kind: "text", text: 'Task added! Send "undo" within a few minutes to remove it.' };
+      if (title && (dueAt !== undefined || !byMatch)) {
+        const validation = safeValidate(createTaskSchema, {
+          title,
+          dueAt,
+          priority: "normal",
+        });
+        if (!validation.ok) return { kind: "text", text: `Hmm, couldn't save that task: ${validation.error}` };
+
+        const result = await createTask(accountId, validation.data);
+        if (!result.ok) return { kind: "text", text: `⚠ ${result.error}` };
+        recordUndoableAction(accountId, { kind: "delete_task", taskId: result.data.id });
+        return { kind: "text", text: 'Task added! Send "undo" within a few minutes to remove it.' };
+      }
+      // parsing failed — fall through to NL
     }
 
     if (lower === "tasks") {
@@ -308,8 +317,8 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
       const inMatch = remaining.match(/\bin\s+(.+)$/i);
       const atMatch = remaining.match(/\bat\s+(.+)$/i);
 
-      let message: string;
-      let when: Date | null;
+      let message: string | undefined;
+      let when: Date | null | undefined;
 
       if (inMatch) {
         message = remaining.slice(0, inMatch.index).trim();
@@ -317,35 +326,23 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
       } else if (atMatch) {
         message = remaining.slice(0, atMatch.index).trim();
         when = parseWhen(`at ${atMatch[1]!.trim()}`, await getAccountTimeZone(accountId));
-      } else {
+      }
+
+      if (when && message) {
+        const validation = safeValidate(createReminderSchema, { message, remindAt: when, recurrence });
+        if (!validation.ok) return { kind: "text", text: `Hmm, couldn't schedule that: ${validation.error}` };
+
+        const result = await createReminder(accountId, validation.data);
+        if (!result.ok) return { kind: "text", text: `⚠ ${result.error}` };
+        recordUndoableAction(accountId, { kind: "delete_reminder", reminderId: result.data.id });
+
+        const recurrenceNote = recurrence === "none" ? "" : ` (repeating ${recurrence})`;
         return {
           kind: "text",
-          text: "Try: remind me call mom in 2h — or: remind me stretch at 9am every day",
+          text: `Got it! I'll remind you ${friendlyTime(when.toISOString())}${recurrenceNote}. Send "undo" within a few minutes to cancel it.`,
         };
       }
-
-      if (!when) {
-        return {
-          kind: "text",
-          text: "I couldn't understand that time. Try formats like 10m, 2h, 1d, or a clock time like 9am.",
-        };
-      }
-      if (!message) {
-        return { kind: "text", text: "What should I remind you about? Try: remind me call mom in 2h" };
-      }
-
-      const validation = safeValidate(createReminderSchema, { message, remindAt: when, recurrence });
-      if (!validation.ok) return { kind: "text", text: `Hmm, couldn't schedule that: ${validation.error}` };
-
-      const result = await createReminder(accountId, validation.data);
-      if (!result.ok) return { kind: "text", text: `⚠ ${result.error}` };
-      recordUndoableAction(accountId, { kind: "delete_reminder", reminderId: result.data.id });
-
-      const recurrenceNote = recurrence === "none" ? "" : ` (repeating ${recurrence})`;
-      return {
-        kind: "text",
-        text: `Got it! I'll remind you ${friendlyTime(when.toISOString())}${recurrenceNote}. Send "undo" within a few minutes to cancel it.`,
-      };
+      // parsing failed — fall through to NL
     }
 
     if (lower.startsWith("alarm ")) {
@@ -353,8 +350,8 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
       const inMatch = rawFull.match(/\bin\s+(.+)$/i);
       const atMatch = rawFull.match(/\bat\s+(.+)$/i);
 
-      let message: string;
-      let when: Date | null;
+      let message: string | undefined;
+      let when: Date | null | undefined;
 
       if (inMatch) {
         message = rawFull.slice(0, inMatch.index).trim();
@@ -362,28 +359,22 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
       } else if (atMatch) {
         message = rawFull.slice(0, atMatch.index).trim();
         when = parseWhen(`at ${atMatch[1]!.trim()}`, await getAccountTimeZone(accountId));
-      } else {
-        return { kind: "text", text: "Try: alarm wake me up in 30m — or: alarm stand up at 2pm" };
       }
 
-      if (!when) {
-        return { kind: "text", text: "I couldn't understand that time. Try formats like 10m, 2h, or 9am." };
+      if (when && message) {
+        const validation = safeValidate(createReminderSchema, { message, remindAt: when, recurrence: "none", isAlarm: true });
+        if (!validation.ok) return { kind: "text", text: `Hmm, couldn't schedule that: ${validation.error}` };
+
+        const result = await createReminder(accountId, validation.data);
+        if (!result.ok) return { kind: "text", text: `⚠ ${result.error}` };
+        recordUndoableAction(accountId, { kind: "delete_reminder", reminderId: result.data.id });
+
+        return {
+          kind: "text",
+          text: `🔔 Alarm set! I'll ping you ${friendlyTime(when.toISOString())} and keep repeating until you say "acknowledge ${shortId(result.data.id)}".`,
+        };
       }
-      if (!message) {
-        return { kind: "text", text: "What should I alarm you about? Try: alarm wake me up in 30m" };
-      }
-
-      const validation = safeValidate(createReminderSchema, { message, remindAt: when, recurrence: "none", isAlarm: true });
-      if (!validation.ok) return { kind: "text", text: `Hmm, couldn't schedule that: ${validation.error}` };
-
-      const result = await createReminder(accountId, validation.data);
-      if (!result.ok) return { kind: "text", text: `⚠ ${result.error}` };
-      recordUndoableAction(accountId, { kind: "delete_reminder", reminderId: result.data.id });
-
-      return {
-        kind: "text",
-        text: `🔔 Alarm set! I'll ping you ${friendlyTime(when.toISOString())} and keep repeating until you say "acknowledge ${shortId(result.data.id)}".`,
-      };
+      // parsing failed — fall through to NL
     }
 
     if (lower.startsWith("acknowledge ")) {
@@ -420,26 +411,23 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
 
       const durationMs = parseRelativeDurationMs(durationText);
       const validation = safeValidate(snoozeReminderSchema, { idPrefix, delayMs: durationMs ?? -1 });
-      if (!validation.ok || durationMs === null) {
-        return { kind: "text", text: "Try: snooze a1b2c3d4 1h — use 'reminders' to see your reminder ids." };
+      if (validation.ok && durationMs !== null) {
+        const pending = await listPendingReminders(accountId, 50);
+        if (!pending.ok) return { kind: "text", text: `⚠ ${pending.error}` };
+        const match = pending.data.find((r) => r.id.startsWith(validation.data.idPrefix));
+        if (match) {
+          const result = await snoozeReminder(accountId, match.id, validation.data.delayMs);
+          if (!result.ok) return { kind: "text", text: `⚠ ${result.error}` };
+
+          recordUndoableAction(accountId, {
+            kind: "restore_reminder_time",
+            reminderId: match.id,
+            previousRemindAt: result.data.previousRemindAt,
+          });
+          return { kind: "text", text: `Snoozed — now set for ${friendlyTime(result.data.newRemindAt)}. Send "undo" to revert.` };
+        }
       }
-
-      // Resolve the short id prefix shown in `reminders` output to a
-      // full row, same pattern as the `done <task-id>` command.
-      const pending = await listPendingReminders(accountId, 50);
-      if (!pending.ok) return { kind: "text", text: `⚠ ${pending.error}` };
-      const match = pending.data.find((r) => r.id.startsWith(validation.data.idPrefix));
-      if (!match) return { kind: "text", text: "Hmm, I don't see a reminder with that id." };
-
-      const result = await snoozeReminder(accountId, match.id, validation.data.delayMs);
-      if (!result.ok) return { kind: "text", text: `⚠ ${result.error}` };
-
-      recordUndoableAction(accountId, {
-        kind: "restore_reminder_time",
-        reminderId: match.id,
-        previousRemindAt: result.data.previousRemindAt,
-      });
-      return { kind: "text", text: `Snoozed — now set for ${friendlyTime(result.data.newRemindAt)}. Send "undo" to revert.` };
+      // parsing failed or no match — fall through to NL
     }
 
     if (lower === "undo") {
@@ -715,6 +703,20 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
       } else {
         return { kind: "text", text: `AI is off for your account, so I can only follow specific commands. Try "help" to see what I can do, or send "ai on" to chat freely.` };
       }
+    }
+
+    // Rigid parsers fell through (parsing failed). Give contextual hints.
+    if (lower.startsWith("remind me ")) {
+      return { kind: "text", text: `I couldn't understand the time. Try "remind me call mom in 2h" or "remind me stretch at 9am". If you have AI on, just say it naturally.` };
+    }
+    if (lower.startsWith("alarm ")) {
+      return { kind: "text", text: `I couldn't understand the time. Try "alarm wake me up in 30m" or "alarm stand up at 2pm".` };
+    }
+    if (lower.startsWith("task ") && /by\s+/i.test(lower)) {
+      return { kind: "text", text: `I couldn't understand the time. Try "task finish report by tomorrow" or just "task buy groceries".` };
+    }
+    if (lower.startsWith("snooze ")) {
+      return { kind: "text", text: `Try: snooze a1b2c3d4 1h — use "reminders" to see your reminder ids.` };
     }
 
     return { kind: "text", text: `Not sure what you mean. Try "help" to see what I can do, or just say something like "note hello world" or "remind me to call mom".` };

@@ -109,12 +109,15 @@ Never forget anything again.
 remind me <message> in <time>
 ```
 
+Time accepts digits + unit: `2h`, `30m`, `1d`, `10s` — and full English words: `5 minutes`, `2 hours`, `1 day`, `30 seconds`.
+
 Examples:
 
 ```
 remind me call mom in 2h
 remind me take out trash in 30m
 remind me water plants in 1d
+remind me call mom in 5 minutes
 ```
 
 **Clock time:**

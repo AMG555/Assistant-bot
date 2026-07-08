@@ -14,20 +14,26 @@ import { nextOccurrenceOfClockTime } from "./timezone.js";
  * 9am" silently means 9am UTC for every user regardless of where they
  * actually are.
  */
-const RELATIVE_PATTERN = /^in\s+(\d+)\s*(s|sec|secs|m|min|mins|h|hr|hrs|d|day|days)$/i;
-const BARE_DURATION_PATTERN = /^(\d+)\s*(s|sec|secs|m|min|mins|h|hr|hrs|d|day|days)$/i;
+const RELATIVE_PATTERN = /^in\s+(\d+)\s*(s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days)$/i;
+const BARE_DURATION_PATTERN = /^(\d+)\s*(s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days)$/i;
 const CLOCK_TIME_PATTERN = /^(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i;
 
 const UNIT_TO_MS: Record<string, number> = {
   s: 1000,
   sec: 1000,
   secs: 1000,
+  second: 1000,
+  seconds: 1000,
   m: 60_000,
   min: 60_000,
   mins: 60_000,
+  minute: 60_000,
+  minutes: 60_000,
   h: 3_600_000,
   hr: 3_600_000,
   hrs: 3_600_000,
+  hour: 3_600_000,
+  hours: 3_600_000,
   d: 86_400_000,
   day: 86_400_000,
   days: 86_400_000,

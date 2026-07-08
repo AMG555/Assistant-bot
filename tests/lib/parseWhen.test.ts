@@ -21,6 +21,13 @@ describe("parseRelativeDurationMs", () => {
     expect(parseRelativeDurationMs("2days")).toBe(2 * 86_400_000);
   });
 
+  it("accepts full English unit words", () => {
+    expect(parseRelativeDurationMs("30 seconds")).toBe(30 * 1000);
+    expect(parseRelativeDurationMs("5 minutes")).toBe(5 * 60_000);
+    expect(parseRelativeDurationMs("2 hours")).toBe(2 * 3_600_000);
+    expect(parseRelativeDurationMs("1 day")).toBe(1 * 86_400_000);
+  });
+
   it("rejects zero, negative, and non-numeric amounts", () => {
     expect(parseRelativeDurationMs("0m")).toBeNull();
     expect(parseRelativeDurationMs("-5m")).toBeNull();
@@ -45,6 +52,13 @@ describe("parseWhen", () => {
   it("resolves 'in <duration>' relative to the current fixed time", () => {
     const result = parseWhen("in 2h");
     expect(result?.toISOString()).toBe("2026-07-05T14:00:00.000Z");
+  });
+
+  it("resolves 'in <duration>' with full English unit words", () => {
+    expect(parseWhen("in 30 seconds")?.toISOString()).toBe("2026-07-05T12:00:30.000Z");
+    expect(parseWhen("in 5 minutes")?.toISOString()).toBe("2026-07-05T12:05:00.000Z");
+    expect(parseWhen("in 2 hours")?.toISOString()).toBe("2026-07-05T14:00:00.000Z");
+    expect(parseWhen("in 1 day")?.toISOString()).toBe("2026-07-06T12:00:00.000Z");
   });
 
   it("resolves clock times against the given timezone, not UTC by default vs explicit", () => {
