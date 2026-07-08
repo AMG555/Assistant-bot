@@ -260,3 +260,34 @@ export async function validateWebhookSecret(accountId: string, candidate: string
     return false;
   }
 }
+
+/** Returns the outgoing webhook URL for an account, or null if not set. */
+export async function getOutgoingWebhookUrl(accountId: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("accounts")
+      .select("outgoing_webhook_url")
+      .eq("id", accountId)
+      .single();
+    if (error) throw error;
+    return data?.outgoing_webhook_url ?? null;
+  } catch (err) {
+    logError("getOutgoingWebhookUrl", err, { accountId });
+    return null;
+  }
+}
+
+/** Sets (or clears, if called with null) the outgoing webhook URL. */
+export async function setOutgoingWebhookUrl(accountId: string, url: string | null): Promise<ServiceResult<null>> {
+  try {
+    const { error } = await supabaseAdmin
+      .from("accounts")
+      .update({ outgoing_webhook_url: url })
+      .eq("id", accountId);
+    if (error) throw error;
+    return { ok: true, data: null };
+  } catch (err) {
+    logError("setOutgoingWebhookUrl", err, { accountId });
+    return { ok: false, error: "Could not update outgoing webhook", code: "internal" };
+  }
+}

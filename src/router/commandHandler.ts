@@ -8,6 +8,7 @@ import {
   setAccountTimeZone,
   setDigestEnabled,
   getOrCreateWebhookSecret,
+  setOutgoingWebhookUrl,
   type Platform,
 } from "../services/accountService.js";
 import { createNote, listRecentNotes, deleteNote } from "../services/notesService.js";
@@ -101,6 +102,8 @@ const HELP_TEXT = [
   "  link — get a code to connect another platform to this account",
   "  connect <code> — merge accounts from another platform",
   "  webhook link — get a URL to push data from external services (n8n, IFTTT, etc.)",
+  "  webhook out <url> — POST proactive messages (reminders, digests) to an external service",
+  "  webhook out off — stop sending outgoing webhooks",
   "",
   "📊  Activity",
   "  chart [7d|30d] [tasks|notes|reminders] — see your activity",
@@ -517,6 +520,21 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
         kind: "text",
         text: `Your webhook inbox is ready.\n\nPOST to this URL with an X-Webhook-Secret header:\n${result.data.url}\n\nYour secret:\n${result.data.secret}\n\nExample:\ncurl -X POST "${result.data.url}" \\\n  -H "Content-Type: application/json" \\\n  -H "X-Webhook-Secret: ${result.data.secret}" \\\n  -d '{"text":"buy milk","source":"n8n"}'`,
       };
+    }
+
+    if (lower.startsWith("webhook out ")) {
+      const url = text.slice("webhook out ".length).trim();
+      if (!url || url === "off") {
+        const result = await setOutgoingWebhookUrl(accountId, null);
+        if (!result.ok) return { kind: "text", text: `⚠ ${result.error}` };
+        return { kind: "text", text: "Outgoing webhook cleared. I won't POST proactive messages anywhere." };
+      }
+      try { new URL(url); } catch {
+        return { kind: "text", text: "That doesn't look like a valid URL. Try: webhook out https://example.com/hook" };
+      }
+      const result = await setOutgoingWebhookUrl(accountId, url);
+      if (!result.ok) return { kind: "text", text: `⚠ ${result.error}` };
+      return { kind: "text", text: `Got it! I'll POST proactive messages (reminders, digests) to:\n${url}` };
     }
 
     if (lower === "ai on") {

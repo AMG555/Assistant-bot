@@ -269,6 +269,20 @@ Returns a URL and secret. Any service can POST JSON to that URL and it's
 saved as a note in your account. See [`docs/webhook-inbox.md`](webhook-inbox.md)
 for examples.
 
+### 🔗 Outgoing Webhook
+
+Forward proactive messages (reminders, digests) from the bot to your own
+service.
+
+```
+webhook out <url>
+webhook out off
+```
+
+The bot POSTs `{ "event": "message_sent", "text": "..." }` to your URL
+every time it sends you a reminder or digest. See
+[`docs/webhook-inbox.md`](webhook-inbox.md) for details.
+
 ### 🔄 Notion Sync
 
 Sync notes with your Notion workspace (requires setup on the server):

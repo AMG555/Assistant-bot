@@ -1,4 +1,13 @@
-# Webhook Inbox — External Service Integration
+# Webhooks — Inbox & Outgoing
+
+Your bot supports two kinds of webhooks:
+
+- **Webhook inbox** — receive external HTTP POSTs and save them as notes
+- **Outgoing webhook** — the bot POSTs to your URL when it sends a proactive message (reminder, digest, etc.)
+
+---
+
+## Inbox — Receiving External Data
 
 Your bot has a **webhook inbox** endpoint that accepts HTTP POSTs from any
 external service and saves the payload as a note in your account.
@@ -93,3 +102,41 @@ Once you have n8n self-hosted:
 - **Weather alerts**: IFTTT weather trigger → saves reminder
 - **Social media**: New mentions, DMs → forwarded to your bot
 - **n8n automation**: Complex multi-step workflows with AI, databases, APIs
+
+---
+
+## Outgoing Webhook — Receiving Proactive Messages from the Bot
+
+When the bot sends you a proactive message (reminder firing, daily digest),
+it can also POST the same content to an external URL you choose.
+
+### Setting it up
+
+```
+webhook out https://your-service.com/hook
+```
+
+Clear it anytime:
+
+```
+webhook out off
+```
+
+### What gets POSTed
+
+```json
+{
+  "event": "message_sent",
+  "text": "⏰ Reminder: call mom"
+}
+```
+
+### Example: Forward reminders to your phone via n8n
+
+1. In n8n, create a **Webhook** trigger (POST)
+2. Add a **Pushover** or **Telegram** node
+3. Use the bot's `webhook out` pointing to your n8n webhook URL
+4. Every reminder fires the n8n workflow → push notification to your phone
+
+The webhook is **fire-and-forget** — it never blocks the reminder from
+arriving in Telegram/WhatsApp, and failures are silently ignored.

@@ -49,6 +49,12 @@ create table if not exists public.accounts (
   -- requests (IFTTT, n8n, email forwarders, etc.) as notes. Generated
   -- on first request via "webhook link" command. Null = not set up.
   webhook_secret       text,
+  -- Outgoing webhook: a URL the bot POSTs to whenever it sends a
+  -- proactive message to this account (reminder fired, digest
+  -- delivered, etc.). The POST body is JSON:
+  --   { "event": "message_sent", "text": "..." }
+  -- Set via "webhook out <url>", clear via "webhook out off".
+  outgoing_webhook_url text,
   created_at         timestamptz not null default now()
 );
 

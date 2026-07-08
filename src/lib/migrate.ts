@@ -38,6 +38,17 @@ begin
     alter table public.reminders add column last_alarm_sent_at timestamptz;
   end if;
 end $$;
+
+-- Add outgoing_webhook_url column to accounts.
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'accounts' and column_name = 'outgoing_webhook_url'
+  ) then
+    alter table public.accounts add column outgoing_webhook_url text;
+  end if;
+end $$;
 `;
 
 export async function runMigrations(): Promise<void> {
