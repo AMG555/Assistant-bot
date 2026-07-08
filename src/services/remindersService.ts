@@ -64,7 +64,14 @@ export async function fetchDueReminders(limit = 50): Promise<ServiceResult<DueRe
         `and(is_alarm.eq.true,remind_at.lte.${new Date().toISOString()},or(last_alarm_sent_at.is.null,last_alarm_sent_at.lte.${fiveMinAgo}))`
       )
       .limit(limit);
-    if (error) throw error;
+    if (error) {
+      // If the is_alarm column doesn't exist (migration not run), fall
+      // back to fetching only normal (non-alarm) due reminders.
+      if (error.message?.includes("does not exist")) {
+        return fetchDueRemindersSimple(limit);
+      }
+      throw error;
+    }
 
     return {
       ok: true,
@@ -82,6 +89,30 @@ export async function fetchDueReminders(limit = 50): Promise<ServiceResult<DueRe
     logError("fetchDueReminders", err);
     return { ok: false, error: "Could not fetch due reminders", code: "internal" };
   }
+}
+
+async function fetchDueRemindersSimple(limit: number): Promise<ServiceResult<DueReminder[]>> {
+  const { data, error } = await supabaseAdmin
+    .from("reminders")
+    .select("id, account_id, message, remind_at, delivery_attempts, recurrence_rule")
+    .eq("status", "pending")
+    .lte("remind_at", new Date().toISOString())
+    .lt("delivery_attempts", MAX_DELIVERY_ATTEMPTS)
+    .limit(limit);
+  if (error) throw error;
+
+  return {
+    ok: true,
+    data: (data ?? []).map((r) => ({
+      id: r.id,
+      accountId: r.account_id,
+      message: r.message,
+      remindAt: r.remind_at,
+      deliveryAttempts: r.delivery_attempts,
+      recurrenceRule: (r.recurrence_rule ?? "none") as RecurrenceRule,
+      isAlarm: false,
+    })),
+  };
 }
 
 /** Marks a reminder as sent, and — if it has a recurrence rule — inserts
