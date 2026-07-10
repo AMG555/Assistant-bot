@@ -26,6 +26,7 @@ import { issueOAuthState, getNotionConnection, setNotionDatabaseId, disconnectNo
 import { buildNotionAuthorizeUrl } from "../services/notionClient.js";
 import { pushNoteToNotion } from "../services/notionSyncService.js";
 import { embedNoteInBackground } from "../services/embeddingSyncService.js";
+import { buildDigestContent } from "../services/digestService.js";
 import {
   createNoteSchema,
   createTaskSchema,
@@ -106,6 +107,7 @@ const HELP_TEXT = [
   "  webhook out off — stop sending outgoing webhooks",
   "",
   "📊  Activity",
+  "  schedule / today / my day — see what's on your schedule",
   "  chart [7d|30d] [tasks|notes|reminders] — see your activity",
   "",
   "🤖  AI Features",
@@ -223,7 +225,36 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
 
       const result = await setAccountTimeZone(accountId, validation.data.timeZone);
       if (!result.ok) return { kind: "text", text: `⚠ ${result.error}` };
-      return { kind: "text", text: `Got it! Your timezone is now ${validation.data.timeZone}.` };
+      return { kind: "text", text: `Got it! Your timezone is now ${validation.data.timeZone}.`       };
+    }
+
+    if (lower === "schedule" || lower === "today" || lower === "my day" || lower.startsWith("what") && (lower.includes("today") || lower.includes("due") || lower.includes("on")) || lower === "agenda") {
+      const timezone = await getAccountTimeZone(accountId);
+      const content = await buildDigestContent(accountId, timezone);
+      if (!content.ok) return { kind: "text", text: `⚠ ${content.error}` };
+      const lines: string[] = ["Here's your schedule for today:"];
+      if (content.data.tasksDueTodayOrOverdue.length > 0) {
+        lines.push("", "Tasks:");
+        for (const t of content.data.tasksDueTodayOrOverdue) {
+          lines.push(`• ${t.title}${t.overdue ? " (overdue)" : ""}`);
+        }
+      }
+      if (content.data.remindersToday.length > 0) {
+        lines.push("", "Reminders:");
+        for (const r of content.data.remindersToday) {
+          lines.push(`• ${r.message} at ${r.remindAt}`);
+        }
+      }
+      if (content.data.recentNotes.length > 0) {
+        lines.push("", "Notes added today:");
+        for (const n of content.data.recentNotes) {
+          lines.push(`• ${n.title}`);
+        }
+      }
+      if (content.data.tasksDueTodayOrOverdue.length === 0 && content.data.remindersToday.length === 0 && content.data.recentNotes.length === 0) {
+        lines.push("", "Nothing on today's schedule — you're free!");
+      }
+      return { kind: "text", text: lines.join("\n") };
     }
 
     if (lower === "digest off") {
