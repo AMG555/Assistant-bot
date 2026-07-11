@@ -1,5 +1,5 @@
 import Groq, { toFile } from "groq-sdk";
-import { env, isGroqConfigured } from "../config/env.js";
+import { env } from "../config/env.js";
 import { groqClient } from "./groqClient.js";
 import { logError, logger } from "../lib/logger.js";
 import { checkRateLimit } from "../middleware/rateLimit.js";

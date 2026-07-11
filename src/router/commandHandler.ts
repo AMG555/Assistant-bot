@@ -271,7 +271,11 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
         // if byMatch found but parse failed, fall through to NL
       }
 
-      if (title && (dueAt !== undefined || !byMatch)) {
+      // Don't create a spurious task if the user is asking about their schedule
+      const taskTitleLower = title.toLowerCase();
+      const isScheduleQuery = !byMatch && (["schedule", "agenda"].some((k) => taskTitleLower.includes(k)) || (taskTitleLower.includes("today") && ["have", "on", "due", "plan", "my", "what", "show", "tell", "about", "for", "anything", "upcoming", "going", "happening"].some((w) => taskTitleLower.includes(w))));
+
+      if (!isScheduleQuery && title && (dueAt !== undefined || !byMatch)) {
         const validation = safeValidate(createTaskSchema, {
           title,
           dueAt,

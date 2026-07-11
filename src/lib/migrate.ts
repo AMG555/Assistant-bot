@@ -1,4 +1,3 @@
-import { supabaseAdmin } from "./supabase.js";
 import { logger } from "./logger.js";
 import { env } from "../config/env.js";
 

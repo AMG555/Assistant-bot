@@ -4,10 +4,7 @@ import { logError } from "../lib/logger.js";
 import { encryptSecret, decryptSecret } from "../lib/tokenCrypto.js";
 import { env } from "../config/env.js";
 import type { ServiceResult } from "./accountService.js";
-
-function hashState(state: string): string {
-  return crypto.createHash("sha256").update(state).digest("hex");
-}
+import { hashCode } from "./accountService.js";
 
 /** Issues a one-time OAuth state token for an account, hashed at rest —
  * identical pattern to link_codes in accountService.ts. This is the
@@ -16,7 +13,7 @@ function hashState(state: string): string {
 export async function issueOAuthState(accountId: string): Promise<ServiceResult<{ state: string }>> {
   try {
     const state = crypto.randomBytes(24).toString("hex");
-    const stateHash = hashState(state);
+    const stateHash = hashCode(state);
     const expiresAt = new Date(Date.now() + env.OAUTH_STATE_TTL_MINUTES * 60_000).toISOString();
 
     const { error } = await supabaseAdmin.from("oauth_states").insert({
@@ -39,7 +36,7 @@ export async function issueOAuthState(accountId: string): Promise<ServiceResult<
  * comparison, single-use, expires — same discipline as consumeLinkCode. */
 export async function consumeOAuthState(state: string): Promise<ServiceResult<{ accountId: string }>> {
   try {
-    const stateHash = hashState(state);
+    const stateHash = hashCode(state);
 
     const { data: candidates, error } = await supabaseAdmin
       .from("oauth_states")

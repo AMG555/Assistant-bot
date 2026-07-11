@@ -1,9 +1,6 @@
 import { supabaseAdmin } from "./supabase.js";
+import { logError } from "./logger.js";
 
-/**
- * Fire-and-forget event to the account's outgoing webhook URL.
- * Never throws — all failures are silently swallowed.
- */
 export async function fireEvent(
   accountId: string,
   event: string,
@@ -27,7 +24,7 @@ export async function fireEvent(
       signal: controller.signal,
     });
     clearTimeout(timeout);
-  } catch {
-    // fire-and-forget — swallow all errors
+  } catch (err) {
+    logError("fireEvent", err, { accountId, event });
   }
 }

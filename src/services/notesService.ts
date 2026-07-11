@@ -21,7 +21,7 @@ export async function createNote(
       .single();
     if (error) throw error;
 
-    await supabaseAdmin.from("activity_log").insert({ account_id: accountId, kind: "note_created" });
+    void supabaseAdmin.from("activity_log").insert({ account_id: accountId, kind: "note_created" });
     void fireEvent(accountId, "note_created", { title: input.title, body: input.body });
 
     return { ok: true, data: { id: data.id } };

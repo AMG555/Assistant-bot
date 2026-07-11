@@ -1,7 +1,7 @@
 import { createInterface } from "node:readline/promises";
-import { stdin as input, stdout as output, exit } from "node:process";
+import { stdin as input, stdout as output } from "node:process";
 import { randomBytes } from "node:crypto";
-import { writeFile, readFile, access } from "node:fs/promises";
+import { writeFile, access } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -208,7 +208,7 @@ ${dim("This will walk you through creating your .env file and deploying the bot.
     `# --- Jina ---`,
     `JINA_API_KEY=${jinaKey}`,
     `JINA_EMBEDDING_MODEL=jina-embeddings-v3`,
-    `JINA_EMBEDDING_DIMENSIONS=768`,
+    `JINA_EMBEDDING_DIMENSIONS=256`,
     ``,
     `# --- Notion ---`,
     `NOTION_OAUTH_CLIENT_ID=${notionClientId}`,

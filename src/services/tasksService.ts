@@ -21,7 +21,7 @@ export async function createTask(
       .single();
     if (error) throw error;
 
-    await supabaseAdmin.from("activity_log").insert({ account_id: accountId, kind: "task_created" });
+    void supabaseAdmin.from("activity_log").insert({ account_id: accountId, kind: "task_created" });
     void fireEvent(accountId, "task_created", { title: input.title, dueAt: input.dueAt?.toISOString() });
 
     return { ok: true, data: { id: data.id } };
@@ -43,7 +43,7 @@ export async function completeTask(accountId: string, taskId: string): Promise<S
     if (error) throw error;
     if (!data) return { ok: false, error: "Task not found", code: "not_found" };
 
-    await supabaseAdmin.from("activity_log").insert({ account_id: accountId, kind: "task_completed" });
+    void supabaseAdmin.from("activity_log").insert({ account_id: accountId, kind: "task_completed" });
     void fireEvent(accountId, "task_completed", { taskId: data.id, title: data.title });
 
     return { ok: true, data: { id: data.id } };
