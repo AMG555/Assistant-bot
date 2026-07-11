@@ -144,7 +144,7 @@ function friendlyTime(iso: string, tz?: string): string {
       const h = Math.round(abs / 3600000);
       return isPast ? `${h}h ago` : `in ${h}h`;
     }
-    return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", ...(tz ? { timeZone: tz } : {}) });
   } catch {
     return iso;
   }
@@ -714,8 +714,9 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
       if (content.data.remindersToday.length > 0) {
         lines.push("", "Reminders:");
         for (const r of content.data.remindersToday) {
-          lines.push(`• ${r.message} at ${r.remindAt}`);
+          lines.push(`• ${shortId(r.id)} ${r.message} at ${friendlyTime(r.remindAt, timezone)}`);
         }
+        lines.push("", `To remove a past one: acknowledge <id>`);
       }
       if (content.data.recentNotes.length > 0) {
         lines.push("", "Notes added today:");
@@ -741,7 +742,8 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
         const history = (await getConversationHistory(accountId)).slice(0, -1);
         const retrieval = await retrieveRelevantNotes(accountId, text, 5);
         const snippets = retrieval.ok ? retrieval.data.map((n) => `${n.title}: ${n.body}`) : [];
-        const aiResult = await interpretMessage(accountId, text, new Date().toISOString(), snippets, history);
+        const timezone = await getAccountTimeZone(accountId);
+        const aiResult = await interpretMessage(accountId, text, new Date().toISOString(), snippets, history, timezone);
 
         if (aiResult.ok) {
           const recognizedIntents = aiResult.intents.filter((i) => i.type !== "unrecognized");

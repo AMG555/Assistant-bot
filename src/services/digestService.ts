@@ -44,7 +44,7 @@ export async function markDigestSentToday(accountId: string, timeZone: string): 
 
 export interface DigestContent {
   tasksDueTodayOrOverdue: Array<{ title: string; dueAt: string | null; overdue: boolean }>;
-  remindersToday: Array<{ message: string; remindAt: string }>;
+  remindersToday: Array<{ id: string; message: string; remindAt: string }>;
   recentNotes: Array<{ title: string }>;
 }
 
@@ -73,7 +73,7 @@ export async function buildDigestContent(accountId: string, timeZone: string): P
         .limit(20),
       supabaseAdmin
         .from("reminders")
-        .select("message, remind_at")
+        .select("id, message, remind_at")
         .eq("account_id", accountId)
         .eq("status", "pending")
         .gt("remind_at", nowIso)
@@ -103,7 +103,7 @@ export async function buildDigestContent(accountId: string, timeZone: string): P
       ok: true,
       data: {
         tasksDueTodayOrOverdue,
-        remindersToday: (remindersResult.data ?? []).map((r) => ({ message: r.message, remindAt: r.remind_at })),
+        remindersToday: (remindersResult.data ?? []).map((r) => ({ id: r.id, message: r.message, remindAt: r.remind_at })),
         recentNotes: (notesResult.data ?? []).map((n) => ({ title: n.title })),
       },
     };

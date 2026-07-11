@@ -168,7 +168,8 @@ export async function interpretMessage(
   message: string,
   nowIso: string,
   contextSnippets: string[] = [],
-  history: { role: "user" | "assistant"; text: string }[] = []
+  history: { role: "user" | "assistant"; text: string }[] = [],
+  timezone?: string
 ): Promise<AiResult> {
   if (!groqClient) {
     return { ok: false, reason: "not_configured" };
@@ -180,6 +181,7 @@ export async function interpretMessage(
   }
 
   try {
+    const tzBlock = timezone ? `\nUser's timezone: ${timezone}` : "";
     const contextBlock =
       contextSnippets.length > 0
         ? `\n\nRelevant notes from this user's account:\n${contextSnippets
@@ -195,7 +197,7 @@ export async function interpretMessage(
     const completion = await groqClient.chat.completions.create({
       model: env.GROQ_MODEL,
       messages: [
-        { role: "system", content: `${SYSTEM_PROMPT}\nCurrent time (ISO-8601): ${nowIso}${contextBlock}` },
+        { role: "system", content: `${SYSTEM_PROMPT}\nCurrent time (ISO-8601): ${nowIso}${tzBlock}${contextBlock}` },
         ...historyMessages,
         { role: "user", content: message },
       ],
