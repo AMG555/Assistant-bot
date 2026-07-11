@@ -76,7 +76,7 @@ export async function buildDigestContent(accountId: string, timeZone: string): P
         .select("message, remind_at")
         .eq("account_id", accountId)
         .eq("status", "pending")
-        .gte("remind_at", startOfTodayUtcIso)
+        .gt("remind_at", nowIso)
         .lte("remind_at", endOfTodayUtcIso)
         .order("remind_at", { ascending: true })
         .limit(20),
