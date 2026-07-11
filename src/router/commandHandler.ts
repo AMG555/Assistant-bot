@@ -228,35 +228,6 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
       return { kind: "text", text: `Got it! Your timezone is now ${validation.data.timeZone}.`       };
     }
 
-    if (lower === "schedule" || lower === "today" || lower === "my day" || lower.startsWith("what") && (lower.includes("today") || lower.includes("due") || lower.includes("on")) || lower === "agenda") {
-      const timezone = await getAccountTimeZone(accountId);
-      const content = await buildDigestContent(accountId, timezone);
-      if (!content.ok) return { kind: "text", text: `⚠ ${content.error}` };
-      const lines: string[] = ["Here's your schedule for today:"];
-      if (content.data.tasksDueTodayOrOverdue.length > 0) {
-        lines.push("", "Tasks:");
-        for (const t of content.data.tasksDueTodayOrOverdue) {
-          lines.push(`• ${t.title}${t.overdue ? " (overdue)" : ""}`);
-        }
-      }
-      if (content.data.remindersToday.length > 0) {
-        lines.push("", "Reminders:");
-        for (const r of content.data.remindersToday) {
-          lines.push(`• ${r.message} at ${r.remindAt}`);
-        }
-      }
-      if (content.data.recentNotes.length > 0) {
-        lines.push("", "Notes added today:");
-        for (const n of content.data.recentNotes) {
-          lines.push(`• ${n.title}`);
-        }
-      }
-      if (content.data.tasksDueTodayOrOverdue.length === 0 && content.data.remindersToday.length === 0 && content.data.recentNotes.length === 0) {
-        lines.push("", "Nothing on today's schedule — you're free!");
-      }
-      return { kind: "text", text: lines.join("\n") };
-    }
-
     if (lower === "digest off") {
       const result = await setDigestEnabled(accountId, false);
       if (!result.ok) return { kind: "text", text: `⚠ ${result.error}` };
@@ -708,6 +679,50 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
         await recordExchange(accountId, "assistant", answer);
         return { kind: "text", text: answer };
       }
+    }
+
+    const schedulePatterns = [
+      /^schedule$/i, /^today$/i, /^my day$/i, /^agenda$/i,
+      /^(what'?s?|show|tell)\s.*(today|schedule|agenda|on|due|up)/i,
+      /^(about|for)\s.*(today|schedule|agenda)/i,
+      /what\s.*(have|do|is)\s.*(today|due)/i,
+      /todays?\s+schedule/i, /today'?s?\s+(plan|agenda)/i,
+      /how'?s?\s+(my|the)\s+day/i,
+      /(what'?s?|anything)\s+(on|due)\s+today/i,
+      /what'?s?\s+(happening|going\s+on|coming\s+up)/i,
+      /plan\s+(for\s+)?today/i,
+      /do\s+i\s+have\s+(anything|something)\s+(today|due)/i,
+      /anything\s+(planned|scheduled|going\s+on)\s+(for\s+)?today/i,
+    ];
+    const hasScheduleKeyword = ["schedule", "agenda"].some((k) => lower.includes(k));
+    const todayWithContext = lower.includes("today") && ["have", "on", "due", "plan", "my", "what", "show", "tell", "about", "for", "anything", "upcoming", "going", "happening"].some((w) => lower.includes(w));
+    if (schedulePatterns.some((p) => p.test(lower)) || hasScheduleKeyword || todayWithContext) {
+      const timezone = await getAccountTimeZone(accountId);
+      const content = await buildDigestContent(accountId, timezone);
+      if (!content.ok) return { kind: "text", text: `⚠ ${content.error}` };
+      const lines = ["Here's your schedule for today:"];
+      if (content.data.tasksDueTodayOrOverdue.length > 0) {
+        lines.push("", "Tasks:");
+        for (const t of content.data.tasksDueTodayOrOverdue) {
+          lines.push(`• ${t.title}${t.overdue ? " (overdue)" : ""}`);
+        }
+      }
+      if (content.data.remindersToday.length > 0) {
+        lines.push("", "Reminders:");
+        for (const r of content.data.remindersToday) {
+          lines.push(`• ${r.message} at ${r.remindAt}`);
+        }
+      }
+      if (content.data.recentNotes.length > 0) {
+        lines.push("", "Notes added today:");
+        for (const n of content.data.recentNotes) {
+          lines.push(`• ${n.title}`);
+        }
+      }
+      if (content.data.tasksDueTodayOrOverdue.length === 0 && content.data.remindersToday.length === 0 && content.data.recentNotes.length === 0) {
+        lines.push("", "Nothing on today's schedule — you're free!");
+      }
+      return { kind: "text", text: lines.join("\n") };
     }
 
     // Natural-language fallback: only reached when no rigid command

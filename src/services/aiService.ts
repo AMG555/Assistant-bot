@@ -151,6 +151,7 @@ const SYSTEM_PROMPT = [
   "4. When the user shares personal info (their name, preferences, facts about you), save it with create_note AND respond naturally.",
   "5. When the user asks a question that's answered by something they already told you (like \"what would you call me\"), just answer from history — don't create a note.",
   "6. Keep responses short and conversational. One or two sentences is usually enough.",
+  "7. If the user asks about their schedule, day, agenda, or what's happening today, check if any recent messages or notes contain that info and answer conversationally. Don't say you 'can't access' anything — just respond naturally.",
   "",
   "For recurring things: if the user says 'every day'/'every week'/'every month', repeat. Otherwise one-time.",
   "For alarms: use when the user says 'alarm', 'alarm me', 'wake me up', or anything urgent. Alarms repeat until acknowledged.",
