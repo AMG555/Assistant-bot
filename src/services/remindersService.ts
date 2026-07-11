@@ -287,20 +287,19 @@ export async function markAlarmDelivered(reminderId: string): Promise<void> {
   }
 }
 
-/** Acknowledges an alarm reminder, marking it as sent so it stops
- * re-delivering. Scoped by account_id. */
+/** Acknowledges a reminder, marking it as sent so it stops
+ * showing in schedule / stops repeating. Scoped by account_id. */
 export async function acknowledgeReminder(accountId: string, reminderId: string): Promise<ServiceResult<null>> {
   try {
     const { error } = await supabaseAdmin
       .from("reminders")
       .update({ status: "sent", delivery_attempts: 0 })
       .eq("id", reminderId)
-      .eq("account_id", accountId)
-      .eq("is_alarm", true);
+      .eq("account_id", accountId);
     if (error) throw error;
     return { ok: true, data: null };
   } catch (err) {
     logError("acknowledgeReminder", err, { accountId, reminderId });
-    return { ok: false, error: "Could not acknowledge that alarm", code: "internal" };
+    return { ok: false, error: "Could not acknowledge that reminder", code: "internal" };
   }
 }

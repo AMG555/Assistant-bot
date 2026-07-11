@@ -397,7 +397,7 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
 
       const result = await acknowledgeReminder(accountId, match.id);
       if (!result.ok) return { kind: "text", text: `⚠ ${result.error}` };
-      return { kind: "text", text: "Alarm acknowledged. It won't repeat anymore." };
+      return { kind: "text", text: "Reminder acknowledged. It won't show up anymore." };
     }
 
     if (lower === "reminders") {
