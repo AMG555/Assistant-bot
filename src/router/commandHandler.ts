@@ -691,7 +691,7 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
       /^(about|for)\s.*(today|schedule|agenda)/i,
       /what\s.*(have|do|is)\s.*(today|due)/i,
       /todays?\s+schedule/i, /today'?s?\s+(plan|agenda)/i,
-      /how'?s?\s+(my|the)\s+day/i,
+      /how'?s?\s+(my|the)\s+day|how\s+is\s+(my|the)\s+day/i,
       /(what'?s?|anything)\s+(on|due)\s+today/i,
       /what'?s?\s+(happening|going\s+on|coming\s+up)/i,
       /plan\s+(for\s+)?today/i,
