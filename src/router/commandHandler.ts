@@ -714,7 +714,7 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
       if (content.data.remindersToday.length > 0) {
         lines.push("", "Reminders:");
         for (const r of content.data.remindersToday) {
-          lines.push(`• ${shortId(r.id)} ${r.message} at ${friendlyTime(r.remindAt, timezone)}`);
+          lines.push(`• ${shortId(r.id)} ${r.message} — ${friendlyTime(r.remindAt, timezone)}`);
         }
         lines.push("", `To remove a past one: acknowledge <id>`);
       }
