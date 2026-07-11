@@ -236,7 +236,8 @@ export async function interpretMessage(
   }
 }
 
-function parseToolCall(name: string, rawArgs: string): AiIntent {
+/** Exported for testing — parses Groq's tool-call JSON into a typed intent. */
+export function parseToolCall(name: string, rawArgs: string): AiIntent {
   let args: Record<string, unknown>;
   try {
     args = JSON.parse(rawArgs);
