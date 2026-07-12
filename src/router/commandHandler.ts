@@ -854,8 +854,8 @@ async function executeAiIntent(accountId: string, intent: AiIntent): Promise<str
       const result = await createReminder(accountId, validation.data);
       if (!result.ok) return `⚠ ${result.error}`;
 
-      const recurrenceNote = validation.data.recurrence === "none" ? "" : ` I'll repeat this ${validation.data.recurrence}.`;
-      return `You're all set${recurrenceNote}`;
+      const recurrenceNote = validation.data.recurrence === "none" ? "" : `, repeats ${validation.data.recurrence}`;
+      return `Got it — "${validation.data.message}" ${friendlyTime(validation.data.remindAt.toISOString())}${recurrenceNote}. Use acknowledge ${shortId(result.data.id)} to dismiss when done.`;
     }
     case "create_alarm": {
       const remindAt = new Date(intent.remindAt);
@@ -870,7 +870,7 @@ async function executeAiIntent(accountId: string, intent: AiIntent): Promise<str
       const result = await createReminder(accountId, validation.data);
       if (!result.ok) return `⚠ ${result.error}`;
 
-      return `🔔 I've got you covered. I'll keep reminding you until you acknowledge it.`;
+      return `🔔 Alarm set — "${validation.data.message}" at ${friendlyTime(remindAt.toISOString())}. I'll keep repeating until you say acknowledge ${shortId(result.data.id)}.`;
     }
     case "answer_question":
       return intent.answer;

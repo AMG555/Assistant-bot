@@ -33,8 +33,9 @@ describe("parseToolCall — NL intent parsing pipeline", () => {
 
   describe("create_reminder", () => {
     it("parses a one-time reminder", () => {
-      const result = parseToolCall("create_reminder", JSON.stringify({ message: "Call mom", remindAtIso: "2026-07-11T14:00:00.000Z", recurrence: "none" }));
-      expect(result).toEqual({ type: "create_reminder", message: "Call mom", remindAt: "2026-07-11T14:00:00.000Z", recurrence: "none" });
+      const futureIso = new Date(Date.now() + 86400000).toISOString();
+      const result = parseToolCall("create_reminder", JSON.stringify({ message: "Call mom", remindAtIso: futureIso, recurrence: "none" }));
+      expect(result).toEqual({ type: "create_reminder", message: "Call mom", remindAt: futureIso, recurrence: "none" });
     });
 
     it("parses a recurring reminder", () => {
@@ -43,8 +44,9 @@ describe("parseToolCall — NL intent parsing pipeline", () => {
     });
 
     it("defaults unset recurrence to none", () => {
-      const result = parseToolCall("create_reminder", JSON.stringify({ message: "Test", remindAtIso: "2026-07-11T12:00:00.000Z" }));
-      expect(result).toEqual({ type: "create_reminder", message: "Test", remindAt: "2026-07-11T12:00:00.000Z", recurrence: "none" });
+      const futureIso = new Date(Date.now() + 86400000).toISOString();
+      const result = parseToolCall("create_reminder", JSON.stringify({ message: "Test", remindAtIso: futureIso }));
+      expect(result).toEqual({ type: "create_reminder", message: "Test", remindAt: futureIso, recurrence: "none" });
     });
 
     it("returns unrecognized for empty message", () => {
