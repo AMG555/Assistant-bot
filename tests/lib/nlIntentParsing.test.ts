@@ -39,8 +39,9 @@ describe("parseToolCall — NL intent parsing pipeline", () => {
     });
 
     it("parses a recurring reminder", () => {
-      const result = parseToolCall("create_reminder", JSON.stringify({ message: "Morning standup", remindAtIso: "2026-07-12T09:00:00.000Z", recurrence: "daily" }));
-      expect(result).toEqual({ type: "create_reminder", message: "Morning standup", remindAt: "2026-07-12T09:00:00.000Z", recurrence: "daily" });
+      const futureIso = new Date(Date.now() + 86400000).toISOString();
+      const result = parseToolCall("create_reminder", JSON.stringify({ message: "Morning standup", remindAtIso: futureIso, recurrence: "daily" }));
+      expect(result).toEqual({ type: "create_reminder", message: "Morning standup", remindAt: futureIso, recurrence: "daily" });
     });
 
     it("defaults unset recurrence to none", () => {

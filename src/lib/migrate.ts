@@ -52,7 +52,7 @@ end $$;
 
 export async function runMigrations(): Promise<void> {
   if (!env.SUPABASE_DB_URL) {
-    logger.warn("SUPABASE_DB_URL not set — skipping startup migration");
+    logger.warn("SUPABASE_DB_URL not set — skipping startup migration. Run manually in Supabase SQL editor: alter table public.reminders add column if not exists is_alarm boolean not null default false; alter table public.reminders add column if not exists last_alarm_sent_at timestamptz;");
     return;
   }
 
