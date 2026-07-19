@@ -25,10 +25,13 @@ cronRouter.post("/internal/cron/dispatch", verifyCronSecret, async (_req, res) =
     let failed = 0;
 
     for (const reminder of dueResult.data) {
-      const prefix = reminder.isAlarm
-        ? `🔔 ALARM (send "acknowledge ${reminder.id.slice(0, 8)}" to stop)`
-        : "⏰ Reminder";
-      const delivered = await deliverToAccount(reminder.accountId, `${prefix}: ${reminder.message}`);
+      const shortId = reminder.id.slice(0, 8);
+      const scheduledAt = new Date(reminder.remindAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+      const recurrenceNote = reminder.recurrenceRule !== "none" ? ` | Repeats ${reminder.recurrenceRule}` : "";
+      const msg = reminder.isAlarm
+        ? `🔔 ALARM: ${reminder.message}\n   Repeats every 5min until you say "acknowledge ${shortId}"`
+        : `⏰ ${reminder.message}\n   ${scheduledAt}${recurrenceNote} | acknowledge ${shortId} to dismiss`;
+      const delivered = await deliverToAccount(reminder.accountId, msg);
       if (delivered) {
         if (reminder.isAlarm) {
           await markAlarmDelivered(reminder.id);
