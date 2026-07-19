@@ -203,7 +203,7 @@ export async function interpretMessage(
         { role: "user", content: message },
       ],
       tools: TOOLS,
-      parallel_tool_calls: true,
+      parallel_tool_calls: false,
       temperature: 0.7,
       max_tokens: 800,
     });

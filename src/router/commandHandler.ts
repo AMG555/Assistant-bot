@@ -628,7 +628,7 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
       }
 
       await recordExchange(accountId, "user", text);
-      const history = (await getConversationHistory(accountId, 10)).slice(0, -1);
+      const history = (await getConversationHistory(accountId, 6)).slice(0, -1);
       const result = await answerQuestionWithRag(accountId, question, history);
       if (!result.ok) {
         return { kind: "text", text: "Sorry, I couldn't reach the AI service. Try again in a bit." };
@@ -739,7 +739,7 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
       const aiEnabled = await isAiEnabledForAccount(accountId);
       if (aiEnabled) {
         await recordExchange(accountId, "user", text);
-        const history = (await getConversationHistory(accountId, 10)).slice(0, -1);
+        const history = (await getConversationHistory(accountId, 6)).slice(0, -1);
         const retrieval = await retrieveRelevantNotes(accountId, text, 5);
         const snippets = retrieval.ok ? retrieval.data.map((n) => `${n.title}: ${n.body}`) : [];
         const timezone = await getAccountTimeZone(accountId);
