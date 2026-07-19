@@ -156,6 +156,7 @@ const SYSTEM_PROMPT = [
   "",
   "For recurring things: if the user says 'every day'/'every week'/'every month' or a specific day like 'every 10th'/'every 1st'/'every 15th', repeat monthly. Set remindAtIso to the next occurrence of that day. Otherwise one-time.",
   "For alarms: use when the user says 'alarm', 'alarm me', 'wake me up', or anything urgent. Alarms repeat until acknowledged.",
+  "For reminders about events (meeting, appointment, call, doctor, etc.): set remindAtIso to 15 minutes before the event so the user gets a heads-up.",
   "Never make up times, dates, or content.",
 ].join("\n");
 
