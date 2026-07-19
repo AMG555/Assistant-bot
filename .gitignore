@@ -16,3 +16,5 @@ temp/
 
 # Agent/tooling config — not relevant to the project itself
 opencode.json
+AGENTS.md
+skills/
