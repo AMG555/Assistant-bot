@@ -127,6 +127,41 @@ const HELP_TEXT = [
 
 const WELCOME_TEXT = "Hey! I'm your assistant. You can chat with me naturally — I understand plain English. Try \"remind me to call mom tomorrow\", \"note grocery list\", or just say hi. Send /help anytime to see what I can do.";
 
+const GUIDE_TEXT = [
+  "🤖  AI Assistant Guide",
+  "",
+  "Just type naturally — I understand plain English.",
+  "",
+  "⏰  Reminders",
+  "  \"remind me to call mom tomorrow at 9am\"",
+  "  \"remind me every day to take medicine at 8pm\"",
+  "  \"remind me every 10th to collect rent\"",
+  "  \"alarm wake me up in 30 minutes\"",
+  "",
+  "📝  Notes",
+  "  \"note meeting notes: discussed budget\"",
+  "  \"remember my wife's name is Sarah\"",
+  "",
+  "✅  Tasks",
+  "  \"add task buy milk tomorrow by 5pm\"",
+  "  \"task finish report\"",
+  "",
+  "📋  Schedule",
+  "  \"what's my schedule today\"",
+  "  \"what's on my agenda\"",
+  "  \"show me today's reminders\"",
+  "",
+  "🔧  Managing",
+  "  acknowledge <id> — dismiss a reminder",
+  "  snooze <id> 30m — delay a reminder",
+  "  reminders — list all pending",
+  "  undo — undo the last action",
+  "",
+  "🎤  Voice messages work too, in any language.",
+  "",
+  "💡  Tip: Send /help for all supported commands.",
+].join("\n");
+
 function friendlyTime(iso: string, tz?: string): string {
   try {
     const d = new Date(iso);
@@ -172,6 +207,10 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
         return { kind: "text", text: WELCOME_TEXT };
       }
       return { kind: "text", text: HELP_TEXT };
+    }
+
+    if (lower === "/guide" || lower === "guide") {
+      return { kind: "text", text: GUIDE_TEXT };
     }
 
     if (lower.startsWith("note ")) {
