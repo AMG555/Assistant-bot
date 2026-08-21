@@ -153,6 +153,7 @@ const SYSTEM_PROMPT = [
   "6. Keep responses short and conversational. One or two sentences is usually enough.",
   "7. If the user asks about their schedule, day, agenda, or what's happening today, check if any recent messages or notes contain that info and answer conversationally. Don't say you 'can't access' anything — just respond naturally.",
   "8. Never re-process old requests from conversation history. Only respond to the current user message. If the user just says 'hi' or a greeting, just greet them back — don't create reminders or notes.",
+  "9. When the user asks a confirmation, check, or conversational follow-up (e.g. 'so you will properly remind me right?', 'did you set it?', 'is that saved?'), answer conversationally (e.g. 'Yes, you're all set for 3 PM!'). DO NOT call create_reminder, create_task, or create_note again.",
   "",
   "For recurring things: if the user says 'every day'/'every week'/'every month' or a specific day like 'every 10th'/'every 1st'/'every 15th', repeat monthly. Set remindAtIso to the next occurrence of that day. Otherwise one-time.",
   "For alarms: use when the user says 'alarm', 'alarm me', 'wake me up', or anything urgent. Alarms repeat until acknowledged.",
