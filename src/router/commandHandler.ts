@@ -257,6 +257,14 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
       };
     }
 
+    if (lower === "timezone" || lower === "/timezone") {
+      const tz = await getAccountTimeZone(accountId);
+      return {
+        kind: "text",
+        text: `Your current timezone is: ${tz}\n\nTo change it, send: timezone <name or abbreviation>\nExamples:\n• timezone Asia/Kolkata (or timezone IST)\n• timezone America/New_York (or timezone EST)\n• timezone Europe/London (or timezone London)`,
+      };
+    }
+
     if (lower.startsWith("timezone ")) {
       const tz = text.slice(9).trim();
       const validation = safeValidate(setTimezoneSchema, { timeZone: tz });
@@ -264,7 +272,7 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
 
       const result = await setAccountTimeZone(accountId, validation.data.timeZone);
       if (!result.ok) return { kind: "text", text: `⚠ ${result.error}` };
-      return { kind: "text", text: `Got it! Your timezone is now ${validation.data.timeZone}.`       };
+      return { kind: "text", text: `Got it! Your timezone is now ${validation.data.timeZone}.` };
     }
 
     if (lower === "digest off") {

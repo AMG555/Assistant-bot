@@ -159,6 +159,20 @@ describe("setTimezoneSchema", () => {
     expect(safeValidate(setTimezoneSchema, { timeZone: "UTC" }).ok).toBe(true);
   });
 
+  it("normalizes shorthand abbreviations to valid IANA names", () => {
+    const ist = safeValidate(setTimezoneSchema, { timeZone: "IST" });
+    expect(ist.ok).toBe(true);
+    if (ist.ok) expect(ist.data.timeZone).toBe("Asia/Kolkata");
+
+    const est = safeValidate(setTimezoneSchema, { timeZone: "est" });
+    expect(est.ok).toBe(true);
+    if (est.ok) expect(est.data.timeZone).toBe("America/New_York");
+
+    const london = safeValidate(setTimezoneSchema, { timeZone: "London" });
+    expect(london.ok).toBe(true);
+    if (london.ok) expect(london.data.timeZone).toBe("Europe/London");
+  });
+
   it("rejects an unrecognized timezone name", () => {
     const result = safeValidate(setTimezoneSchema, { timeZone: "Not/AZone" });
     expect(result.ok).toBe(false);
