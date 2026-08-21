@@ -284,7 +284,15 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
 
       const result = await setAccountTimeZone(accountId, validation.data.timeZone);
       if (!result.ok) return { kind: "text", text: `⚠ ${result.error}` };
-      return { kind: "text", text: `Got it! Your timezone is now ${validation.data.timeZone}.` };
+
+      // Check if user has pending reminders that may be scheduled with wrong timezone
+      const pendingReminders = await listPendingReminders(accountId, 50);
+      const hasReminders = pendingReminders.ok && pendingReminders.data.length > 0;
+      const reminderWarning = hasReminders
+        ? `\n\n⚠️ Note: You have ${pendingReminders.data.length} pending reminder(s). These were scheduled with your old timezone and won't be updated automatically. Type 'reminders' to review them.`
+        : "";
+
+      return { kind: "text", text: `Got it! Your timezone is now ${validation.data.timeZone}.${reminderWarning}` };
     }
 
     if (lower === "digest off") {
@@ -404,10 +412,11 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
         if (!result.ok) return { kind: "text", text: `⚠ ${result.error}` };
         recordUndoableAction(accountId, { kind: "delete_reminder", reminderId: result.data.id });
 
+        const userTz = await getAccountTimeZone(accountId);
         const recurrenceNote = recurrence === "none" ? "" : ` (repeating ${recurrence})`;
         return {
           kind: "text",
-          text: `Got it! I'll remind you ${friendlyTime(when.toISOString())}${recurrenceNote}. Send "undo" within a few minutes to cancel it.`,
+          text: `Got it! I'll remind you ${friendlyTime(when.toISOString(), userTz)}${recurrenceNote}. Send "undo" within a few minutes to cancel it.`,
         };
       }
       // parsing failed — fall through to NL
@@ -437,9 +446,10 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
         if (!result.ok) return { kind: "text", text: `⚠ ${result.error}` };
         recordUndoableAction(accountId, { kind: "delete_reminder", reminderId: result.data.id });
 
+        const userTz = await getAccountTimeZone(accountId);
         return {
           kind: "text",
-          text: `🔔 Alarm set! I'll ping you ${friendlyTime(when.toISOString())} and keep repeating until you say "acknowledge ${shortId(result.data.id)}".`,
+          text: `🔔 Alarm set! I'll ping you ${friendlyTime(when.toISOString(), userTz)} and keep repeating until you say "acknowledge ${shortId(result.data.id)}".`,
         };
       }
       // parsing failed — fall through to NL
@@ -463,10 +473,12 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
       const result = await listPendingReminders(accountId);
       if (!result.ok) return { kind: "text", text: `⚠ ${result.error}` };
       if (result.data.length === 0) return { kind: "text", text: "No pending reminders right now." };
+      
+      const userTz = await getAccountTimeZone(accountId);
       return {
         kind: "text",
         text: result.data
-          .map((r) => `• ${shortId(r.id)} ${r.message} ${friendlyTime(r.remindAt)}${r.recurrenceRule !== "none" ? ` (${r.recurrenceRule})` : ""}`)
+          .map((r) => `• ${shortId(r.id)} ${r.message} ${friendlyTime(r.remindAt, userTz)}${r.recurrenceRule !== "none" ? ` (${r.recurrenceRule})` : ""}`)
           .join("\n"),
       };
     }

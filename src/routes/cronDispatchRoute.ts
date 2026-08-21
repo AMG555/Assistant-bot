@@ -3,6 +3,7 @@ import { verifyCronSecret } from "../middleware/verifyCronSecret.js";
 import { fetchDueReminders, markReminderSent, markReminderFailedAttempt, markAlarmDelivered } from "../services/remindersService.js";
 import { deliverToAccount } from "../lib/deliverToAccount.js";
 import { logError, logger } from "../lib/logger.js";
+import { getAccountTimeZone } from "../services/accountService.js";
 
 export const cronRouter = Router();
 
@@ -29,12 +30,14 @@ cronRouter.post("/internal/cron/dispatch", verifyCronSecret, async (_req, res) =
       const chunk = dueResult.data.slice(i, i + BATCH_SIZE);
       const results = await Promise.allSettled(
         chunk.map(async (reminder) => {
+          const userTz = await getAccountTimeZone(reminder.accountId);
           const shortId = reminder.id.slice(0, 8);
           const scheduledAt = new Date(reminder.remindAt).toLocaleString("en-US", {
             month: "short",
             day: "numeric",
             hour: "numeric",
             minute: "2-digit",
+            timeZone: userTz,
           });
           const recurrenceNote = reminder.recurrenceRule !== "none" ? ` | Repeats ${reminder.recurrenceRule}` : "";
           const msg = reminder.isAlarm
