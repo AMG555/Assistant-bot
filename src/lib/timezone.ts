@@ -4,6 +4,57 @@
  * Node version updates).
  */
 
+const TIMEZONE_ALIASES: Record<string, string> = {
+  ist: "Asia/Kolkata",
+  india: "Asia/Kolkata",
+  kolkata: "Asia/Kolkata",
+  calcutta: "Asia/Kolkata",
+  est: "America/New_York",
+  edt: "America/New_York",
+  et: "America/New_York",
+  ny: "America/New_York",
+  newyork: "America/New_York",
+  "new york": "America/New_York",
+  pst: "America/Los_Angeles",
+  pdt: "America/Los_Angeles",
+  pt: "America/Los_Angeles",
+  la: "America/Los_Angeles",
+  cst: "America/Chicago",
+  cdt: "America/Chicago",
+  ct: "America/Chicago",
+  mst: "America/Denver",
+  mdt: "America/Denver",
+  mt: "America/Denver",
+  gmt: "UTC",
+  utc: "UTC",
+  uk: "Europe/London",
+  london: "Europe/London",
+  bst: "Europe/London",
+  cet: "Europe/Paris",
+  cest: "Europe/Paris",
+  paris: "Europe/Paris",
+  berlin: "Europe/Berlin",
+  jst: "Asia/Tokyo",
+  tokyo: "Asia/Tokyo",
+  japan: "Asia/Tokyo",
+  sgt: "Asia/Singapore",
+  singapore: "Asia/Singapore",
+  aest: "Australia/Sydney",
+  aedt: "Australia/Sydney",
+  sydney: "Australia/Sydney",
+  dubai: "Asia/Dubai",
+  gst: "Asia/Dubai",
+};
+
+export function normalizeTimeZone(raw: string): string {
+  const cleaned = raw.trim();
+  const lower = cleaned.toLowerCase();
+  if (TIMEZONE_ALIASES[lower]) {
+    return TIMEZONE_ALIASES[lower]!;
+  }
+  return cleaned;
+}
+
 /** Validates an IANA timezone name by attempting to construct a
  * formatter with it. This correctly accepts both canonical names (e.g.
  * "Asia/Calcutta") and long-standing aliases (e.g. "Asia/Kolkata") that
@@ -11,7 +62,8 @@
  * `Intl.supportedValuesOf("timeZone")` canonical list. */
 export function isValidTimeZone(tz: string): boolean {
   try {
-    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    const normalized = normalizeTimeZone(tz);
+    new Intl.DateTimeFormat("en-US", { timeZone: normalized });
     return true;
   } catch {
     return false;

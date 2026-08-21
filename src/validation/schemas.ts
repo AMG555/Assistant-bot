@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isValidTimeZone } from "../lib/timezone.js";
+import { isValidTimeZone, normalizeTimeZone } from "../lib/timezone.js";
 
 /**
  * SERVER-SIDE VALIDATION LAYER
@@ -41,7 +41,8 @@ export const setTimezoneSchema = z.object({
     .trim()
     .min(1)
     .max(64)
-    .refine((tz) => isValidTimeZone(tz), "Not a recognized timezone (use an IANA name, e.g. Asia/Kolkata)"),
+    .transform((tz) => normalizeTimeZone(tz))
+    .refine((tz) => isValidTimeZone(tz), "Not a recognized timezone (e.g. Asia/Kolkata, America/New_York, IST, EST)"),
 });
 
 export const linkCodeRequestSchema = z.object({
