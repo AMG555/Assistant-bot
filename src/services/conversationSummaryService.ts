@@ -4,6 +4,7 @@ import { checkRateLimit } from "../middleware/rateLimit.js";
 import { logError } from "../lib/logger.js";
 import { createNote } from "./notesService.js";
 import { fetchExchangesForSummarization, deleteExchanges } from "../lib/conversationMemory.js";
+import { callWithModelFallback } from "./aiService.js";
 
 export type SummaryResult =
   | { ok: true; summary: string }
@@ -32,21 +33,27 @@ export async function summarizeConversation(
   try {
     const conversationText = exchanges.map((e) => `${e.role}: ${e.text}`).join("\n");
 
-    const completion = await groqClient.chat.completions.create({
-      model: env.GROQ_MODEL,
-      messages: [
-        {
-          role: "system",
-          content:
-            "Summarize the following conversation in 2-4 concise sentences. " +
-            "Capture key information, decisions, facts, and preferences the user mentioned. " +
-            "Do NOT add any commentary, advice, or information not present in the conversation.",
-        },
-        { role: "user", content: conversationText },
-      ],
-      temperature: 0.3,
-      max_tokens: 300,
-    });
+    const completion = await callWithModelFallback(
+      env.GROQ_MODEL,
+      env.GROQ_FALLBACK_MODEL,
+      (model) =>
+        groqClient!.chat.completions.create({
+          model,
+          messages: [
+            {
+              role: "system",
+              content:
+                "Summarize the following conversation in 2-4 concise sentences. " +
+                "Capture key information, decisions, facts, and preferences the user mentioned. " +
+                "Do NOT add any commentary, advice, or information not present in the conversation.",
+            },
+            { role: "user", content: conversationText },
+          ],
+          temperature: 0.3,
+          max_tokens: 300,
+        }),
+      { accountId, operation: "summarizeConversation" }
+    );
 
     const summary = completion.choices[0]?.message?.content?.trim();
     if (!summary) return { ok: false, reason: "provider_error" };

@@ -35,7 +35,8 @@ Bot:        Got it — you said: add milk and eggs to shopping list. Saved your 
 | 📝 **Notes** | Save and search notes. Full-text or semantic (AI) search. |
 | ✅ **Tasks** | To-do list with due dates. Mark done, undo, list open. |
 | ⏰ **Reminders** | One-time or recurring (daily/weekly/monthly). Timezone-aware. DST-safe. |
-| 🧠 **AI Assistant** | Natural language: "remind me X and also save Y". Powered by Groq (Llama 3.3 70B). |
+| 🧠 **AI Assistant** | Natural language: "remind me X and also save Y". Powered by Groq (GPT-OSS 120B + GPT-OSS 20B fallback). |
+| 👁️ **Vision OCR** | Send photos or whiteboard notes — transcribed via Groq Multimodal (Qwen 3.6 27B). |
 | 🎤 **Voice Notes** | Send a voice message — transcribed automatically via Whisper. |
 | 📊 **Charts** | Visualize your weekly/monthly activity. |
 | 📰 **Daily Digest** | Optional morning summary of tasks, reminders, and notes. |
@@ -118,17 +119,17 @@ Then **talk to your bot on Telegram** — it understands plain English.
                                                   │          │         │
             ┌──────────────────────────┐  ┌───────▼──┐ ┌──────▼──┐ ┌──▼────────┐
             │     External AI / Search  │  │ Supabase │ │  Groq   │ │   Jina    │
-            │                          │  │ (PG +     │ │(Llama 3  │ │(Embeddings│
-            │  ┌──────┐  ┌───────────┐ │  │  Storage) │ │ 70B /    │ │ 256-dim)  │
-            │  │Notion│  │ Webhook   │ │  │           │ │ Whisper) │ │           │
-            │  │OAuth │  │ Inbox     │ │  │ Tables:   │ │          │ │           │
-            │  │+ Sync│  │(external  │ │  │ accounts  │ │          │ │           │
-            │  └──────┘  │ POST)     │ │  │ notes     │ │          │ │           │
-            │            └───────────┘ │  │ tasks     │ │          │ │           │
-            │                          │  │ reminders │ │          │ │           │
-            │                          │  │ conv_hist │ │          │ │           │
-            │                          │  │ activity  │ │          │ │           │
-            └──────────────────────────┘  └───────────┘ └──────────┘ └───────────┘
+            │                          │  │ (PG +     │ │(GPT-OSS │ │(Embeddings│
+            │  ┌──────┐  ┌───────────┐ │  │  Storage) │ │ 120B/20B│ │ 256-dim)  │
+            │  │Notion│  │ Webhook   │ │  │           │ │ Whisper)│ │           │
+            │  │OAuth │  │ Inbox     │ │  │ Tables:   │ │         │ │           │
+            │  │+ Sync│  │(external  │ │  │ accounts  │ │         │ │           │
+            │  └──────┘  │ POST)     │ │  │ notes     │ │         │ │           │
+            │            └───────────┘ │  │ tasks     │ │         │ │           │
+            │                          │  │ reminders │ │         │ │           │
+            │                          │  │ conv_hist │ │         │ │           │
+            │                          │  │ activity  │ │         │ │           │
+            └──────────────────────────┘  └───────────┘ └─────────┘ └───────────┘
 ```
 
 - **Zero client-side code.** The bot server holds the only Supabase key.
@@ -145,7 +146,7 @@ Then **talk to your bot on Telegram** — it understands plain English.
 | Runtime | Node.js 20+ / TypeScript 5 |
 | Framework | Express 5 |
 | Database | Supabase (PostgreSQL + pgvector) |
-| AI | Groq (Llama 3.3 70B, Whisper) |
+| AI | Groq (GPT-OSS 120B/20B, Qwen 3.6 27B Vision, Whisper) |
 | Embeddings | Jina AI (Matryoshka, 256-dim) |
 | Hosting | Render (free tier) |
 | Scheduling | Supabase pg_cron + cron-job.org |

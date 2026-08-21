@@ -51,7 +51,12 @@ const envSchema = z.object({
   // Optional — see isGroqConfigured below. Blank key means the AI layer
   // never activates, regardless of any per-account opt-in.
   GROQ_API_KEY: z.string().optional().default(""),
-  GROQ_MODEL: z.string().min(1).default("llama-3.3-70b-versatile"),
+  GROQ_MODEL: z.string().min(1).default("openai/gpt-oss-120b"),
+  GROQ_FALLBACK_MODEL: z.string().min(1).default("openai/gpt-oss-20b"),
+  GROQ_VISION_MODEL: z.string().min(1).default("qwen/qwen3.6-27b"),
+  GROQ_VISION_FALLBACK_MODEL: z.string().min(1).default("groq/compound"),
+  GROQ_AUDIO_MODEL: z.string().min(1).default("whisper-large-v3-turbo"),
+  GROQ_AUDIO_FALLBACK_MODEL: z.string().min(1).default("whisper-large-v3"),
   GROQ_MAX_CALLS_PER_HOUR: z.coerce.number().int().positive().default(30),
 
   // Notion sync is fully optional — see isNotionConfigured below. If
