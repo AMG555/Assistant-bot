@@ -22,8 +22,7 @@
   "Digest summarization" below).
 - **Vision and image transcription** — photos or document screenshots sent on
   Telegram/WhatsApp are transcribed using Groq's multimodal model
-  (`qwen/qwen3.6-27b`, with automatic fallback to
-  `meta-llama/llama-4-scout-17b-16e-instruct`).
+  (`qwen/qwen3.6-27b`, with automatic fallback to `groq/compound`).
 - **Voice note transcription** (Telegram + WhatsApp) — a voice message is
   downloaded server-side, transcribed via Groq's Whisper
   (`whisper-large-v3-turbo`, with automatic fallback to `whisper-large-v3`), and the resulting text is run through the
@@ -33,8 +32,8 @@
   different API surface entirely).
 
 ## Why Groq specifically
-Groq's inference is extremely fast (hundreds of tokens/sec) on Llama and
-GPT-OSS models with full tool/function-calling support, which is exactly
+Groq's inference is extremely fast (hundreds of tokens/sec) on GPT-OSS
+and Qwen models with full tool/function-calling support, which is exactly
 the shape of workload here — short, structured, low-latency intent
 extraction, not long-form generation. Their Services Agreement states
 inputs/outputs are not used for training and are not permanently

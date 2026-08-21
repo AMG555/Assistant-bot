@@ -103,34 +103,34 @@ describe("callWithModelFallback — model resilience", () => {
   it("returns primary model result when primary succeeds", async () => {
     const fn = vi.fn().mockImplementation(async (model: string) => `result from ${model}`);
     const result = await callWithModelFallback(
-      "llama-3.3-70b-versatile",
-      "llama-3.1-8b-instant",
+      "openai/gpt-oss-120b",
+      "openai/gpt-oss-20b",
       fn,
       { operation: "testOp" }
     );
-    expect(result).toBe("result from llama-3.3-70b-versatile");
+    expect(result).toBe("result from openai/gpt-oss-120b");
     expect(fn).toHaveBeenCalledTimes(1);
-    expect(fn).toHaveBeenCalledWith("llama-3.3-70b-versatile");
+    expect(fn).toHaveBeenCalledWith("openai/gpt-oss-120b");
   });
 
   it("falls back to secondary model when primary fails", async () => {
     const fn = vi.fn().mockImplementation(async (model: string) => {
-      if (model === "llama-3.3-70b-versatile") {
+      if (model === "openai/gpt-oss-120b") {
         throw new Error("model_decommissioned");
       }
       return `result from ${model}`;
     });
 
     const result = await callWithModelFallback(
-      "llama-3.3-70b-versatile",
-      "llama-3.1-8b-instant",
+      "openai/gpt-oss-120b",
+      "openai/gpt-oss-20b",
       fn,
       { operation: "testOp", accountId: "acc-123" }
     );
-    expect(result).toBe("result from llama-3.1-8b-instant");
+    expect(result).toBe("result from openai/gpt-oss-20b");
     expect(fn).toHaveBeenCalledTimes(2);
-    expect(fn).toHaveBeenNthCalledWith(1, "llama-3.3-70b-versatile");
-    expect(fn).toHaveBeenNthCalledWith(2, "llama-3.1-8b-instant");
+    expect(fn).toHaveBeenNthCalledWith(1, "openai/gpt-oss-120b");
+    expect(fn).toHaveBeenNthCalledWith(2, "openai/gpt-oss-20b");
   });
 
   it("throws fallback error when both models fail", async () => {
@@ -140,12 +140,12 @@ describe("callWithModelFallback — model resilience", () => {
 
     await expect(
       callWithModelFallback(
-        "llama-3.3-70b-versatile",
-        "llama-3.1-8b-instant",
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
         fn,
         { operation: "testOp" }
       )
-    ).rejects.toThrow("failure on llama-3.1-8b-instant");
+    ).rejects.toThrow("failure on openai/gpt-oss-20b");
     expect(fn).toHaveBeenCalledTimes(2);
   });
 
@@ -156,12 +156,12 @@ describe("callWithModelFallback — model resilience", () => {
 
     await expect(
       callWithModelFallback(
-        "llama-3.3-70b-versatile",
-        "llama-3.3-70b-versatile",
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-120b",
         fn,
         { operation: "testOp" }
       )
-    ).rejects.toThrow("failure on llama-3.3-70b-versatile");
+    ).rejects.toThrow("failure on openai/gpt-oss-120b");
     expect(fn).toHaveBeenCalledTimes(1);
   });
 });
