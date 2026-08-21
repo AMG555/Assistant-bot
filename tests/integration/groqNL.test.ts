@@ -40,7 +40,7 @@ describe.skipIf(!hasGroqKey)("Groq NL integration — interpretMessage", () => {
     const reminder = result.intents.find((i: any) => i.type === "create_reminder");
     expect(reminder).toBeDefined();
     expect(reminder!.message.toLowerCase()).toContain("call mom");
-  });
+  }, 15000);
 
   it("interprets 'save a note about meeting notes' as create_note", async () => {
     const result = await interpretMessage("test-account", "save a note about meeting notes | discussed budget", new Date().toISOString());
@@ -49,7 +49,7 @@ describe.skipIf(!hasGroqKey)("Groq NL integration — interpretMessage", () => {
     const note = result.intents.find((i: any) => i.type === "create_note");
     expect(note).toBeDefined();
     expect(note!.title.toLowerCase()).toContain("meeting");
-  });
+  }, 15000);
 
   it("interprets 'add task buy milk tomorrow by 5pm' as create_task with dueAt", async () => {
     const result = await interpretMessage("test-account", "add task buy milk tomorrow by 5pm", new Date().toISOString());
@@ -58,7 +58,7 @@ describe.skipIf(!hasGroqKey)("Groq NL integration — interpretMessage", () => {
     const task = result.intents.find((i: any) => i.type === "create_task");
     expect(task).toBeDefined();
     expect(task!.title.toLowerCase()).toContain("milk");
-  });
+  }, 15000);
 
   it("interprets 'set alarm for 10 minutes' as create_alarm", async () => {
     const result = await interpretMessage("test-account", "set alarm for 10 minutes", new Date().toISOString());
@@ -66,7 +66,7 @@ describe.skipIf(!hasGroqKey)("Groq NL integration — interpretMessage", () => {
     if (!result.ok) return;
     const alarm = result.intents.find((i: any) => i.type === "create_alarm");
     expect(alarm).toBeDefined();
-  });
+  }, 15000);
 
   it("interprets 'remind me every day to take medicine at 8pm' with daily recurrence", async () => {
     const result = await interpretMessage("test-account", "remind me every day to take medicine at 8pm", new Date().toISOString());
@@ -75,7 +75,7 @@ describe.skipIf(!hasGroqKey)("Groq NL integration — interpretMessage", () => {
     const reminder = result.intents.find((i: any) => i.type === "create_reminder");
     expect(reminder).toBeDefined();
     expect(reminder!.recurrence).toBe("daily");
-  });
+  }, 15000);
 
   it("interprets 'remind me to water plants every week' with weekly recurrence", async () => {
     const result = await interpretMessage("test-account", "remind me to water plants every week", new Date().toISOString());
@@ -84,7 +84,7 @@ describe.skipIf(!hasGroqKey)("Groq NL integration — interpretMessage", () => {
     const reminder = result.intents.find((i: any) => i.type === "create_reminder");
     expect(reminder).toBeDefined();
     expect(reminder!.recurrence).toBe("weekly");
-  });
+  }, 15000);
 });
 
 describe.skipIf(!hasGroqKey)("Groq NL integration — timezone & schedule", () => {
@@ -108,5 +108,5 @@ describe.skipIf(!hasGroqKey)("Groq NL integration — timezone & schedule", () =
     const remindHour = new Date(reminder.remindAt).getUTCHours();
     expect(remindHour).toBeGreaterThanOrEqual(5);
     expect(remindHour).toBeLessThanOrEqual(13);
-  });
+  }, 15000);
 });

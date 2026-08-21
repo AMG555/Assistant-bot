@@ -52,36 +52,41 @@ digestRouter.post("/internal/cron/digest", verifyCronSecret, async (_req, res) =
       return res.status(500).json({ error: dueResult.error });
     }
 
+    const BATCH_SIZE = 5;
     let sent = 0;
     let failed = 0;
 
-    for (const account of dueResult.data) {
-      const contentResult = await buildDigestContent(account.accountId, account.timezone);
-      if (!contentResult.ok) {
-        failed += 1;
-        continue;
+    for (let i = 0; i < dueResult.data.length; i += BATCH_SIZE) {
+      const chunk = dueResult.data.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(
+        chunk.map(async (account) => {
+          const contentResult = await buildDigestContent(account.accountId, account.timezone);
+          if (!contentResult.ok) {
+            return false;
+          }
+
+          const bulletMessage = formatDigestMessage(contentResult.data);
+          const message = await maybeSummarizeWithAi(account.accountId, bulletMessage);
+          const delivered = await deliverToAccount(account.accountId, message);
+
+          void fireEvent(account.accountId, "digest_sent", {
+            tasksDue: contentResult.data.tasksDueTodayOrOverdue.length,
+            reminders: contentResult.data.remindersToday.length,
+            notes: contentResult.data.recentNotes.length,
+          });
+
+          await markDigestSentToday(account.accountId, account.timezone);
+          return delivered;
+        })
+      );
+
+      for (const r of results) {
+        if (r.status === "fulfilled" && r.value) {
+          sent += 1;
+        } else {
+          failed += 1;
+        }
       }
-
-      const bulletMessage = formatDigestMessage(contentResult.data);
-      const message = await maybeSummarizeWithAi(account.accountId, bulletMessage);
-      const delivered = await deliverToAccount(account.accountId, message);
-
-      void fireEvent(account.accountId, "digest_sent", {
-        tasksDue: contentResult.data.tasksDueTodayOrOverdue.length,
-        reminders: contentResult.data.remindersToday.length,
-        notes: contentResult.data.recentNotes.length,
-      });
-
-      // Mark as sent regardless of delivery success: a failed delivery
-      // here almost always means "no reachable platform identity",
-      // which will keep failing every cycle for the rest of the day —
-      // retrying every 15-30 minutes forever would be noise, not
-      // resilience. This mirrors the reminder dispatcher's attempt cap
-      // in spirit, just applied per-day instead of per-attempt-count.
-      await markDigestSentToday(account.accountId, account.timezone);
-
-      if (delivered) sent += 1;
-      else failed += 1;
     }
 
     logger.info({ context: "digestDispatchRoute", sent, failed, total: dueResult.data.length }, "digest_dispatch_cycle_complete");

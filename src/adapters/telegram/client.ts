@@ -9,6 +9,7 @@ async function callTelegram(method: string, body: Record<string, unknown>): Prom
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) {
       const errBody = await res.text().catch(() => "");
@@ -45,13 +46,17 @@ export async function sendTelegramChatAction(chatId: string | number, action: Te
  * network calls. */
 export async function downloadTelegramFile(fileId: string): Promise<Buffer | null> {
   try {
-    const metaRes = await fetch(`${API_BASE}/getFile?file_id=${encodeURIComponent(fileId)}`);
+    const metaRes = await fetch(`${API_BASE}/getFile?file_id=${encodeURIComponent(fileId)}`, {
+      signal: AbortSignal.timeout(8000),
+    });
     if (!metaRes.ok) throw new Error(`getFile failed: ${metaRes.status}`);
     const meta = (await metaRes.json()) as { ok: boolean; result?: { file_path?: string } };
     const filePath = meta.result?.file_path;
     if (!meta.ok || !filePath) throw new Error("getFile returned no file_path");
 
-    const fileRes = await fetch(`https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${filePath}`);
+    const fileRes = await fetch(`https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${filePath}`, {
+      signal: AbortSignal.timeout(12000),
+    });
     if (!fileRes.ok) throw new Error(`file download failed: ${fileRes.status}`);
 
     const arrayBuffer = await fileRes.arrayBuffer();
@@ -69,7 +74,11 @@ export async function sendTelegramPhoto(chatId: string | number, buffer: Buffer,
     form.append("caption", caption);
     form.append("photo", new Blob([buffer], { type: "image/png" }), "chart.png");
 
-    const res = await fetch(`${API_BASE}/sendPhoto`, { method: "POST", body: form });
+    const res = await fetch(`${API_BASE}/sendPhoto`, {
+      method: "POST",
+      body: form,
+      signal: AbortSignal.timeout(12000),
+    });
     if (!res.ok) {
       const errBody = await res.text().catch(() => "");
       throw new Error(`Telegram sendPhoto failed: ${res.status} ${errBody.slice(0, 200)}`);

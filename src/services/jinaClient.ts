@@ -44,6 +44,7 @@ export async function embedText(
         normalized: true,
         input: [text],
       }),
+      signal: AbortSignal.timeout(5000),
     });
 
     if (!res.ok) {
