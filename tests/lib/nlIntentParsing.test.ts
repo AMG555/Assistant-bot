@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { parseToolCall } from "../../src/services/aiService.js";
+import { describe, it, expect, vi } from "vitest";
+import { parseToolCall, callWithModelFallback } from "../../src/services/aiService.js";
 
 describe("parseToolCall — NL intent parsing pipeline", () => {
   describe("create_note", () => {
@@ -98,3 +98,71 @@ describe("parseToolCall — NL intent parsing pipeline", () => {
     });
   });
 });
+
+describe("callWithModelFallback — model resilience", () => {
+  it("returns primary model result when primary succeeds", async () => {
+    const fn = vi.fn().mockImplementation(async (model: string) => `result from ${model}`);
+    const result = await callWithModelFallback(
+      "openai/gpt-oss-120b",
+      "openai/gpt-oss-20b",
+      fn,
+      { operation: "testOp" }
+    );
+    expect(result).toBe("result from openai/gpt-oss-120b");
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(fn).toHaveBeenCalledWith("openai/gpt-oss-120b");
+  });
+
+  it("falls back to secondary model when primary fails", async () => {
+    const fn = vi.fn().mockImplementation(async (model: string) => {
+      if (model === "openai/gpt-oss-120b") {
+        throw new Error("model_decommissioned");
+      }
+      return `result from ${model}`;
+    });
+
+    const result = await callWithModelFallback(
+      "openai/gpt-oss-120b",
+      "openai/gpt-oss-20b",
+      fn,
+      { operation: "testOp", accountId: "acc-123" }
+    );
+    expect(result).toBe("result from openai/gpt-oss-20b");
+    expect(fn).toHaveBeenCalledTimes(2);
+    expect(fn).toHaveBeenNthCalledWith(1, "openai/gpt-oss-120b");
+    expect(fn).toHaveBeenNthCalledWith(2, "openai/gpt-oss-20b");
+  });
+
+  it("throws fallback error when both models fail", async () => {
+    const fn = vi.fn().mockImplementation(async (model: string) => {
+      throw new Error(`failure on ${model}`);
+    });
+
+    await expect(
+      callWithModelFallback(
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        fn,
+        { operation: "testOp" }
+      )
+    ).rejects.toThrow("failure on openai/gpt-oss-20b");
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws primary error immediately if fallback is identical to primary", async () => {
+    const fn = vi.fn().mockImplementation(async (model: string) => {
+      throw new Error(`failure on ${model}`);
+    });
+
+    await expect(
+      callWithModelFallback(
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-120b",
+        fn,
+        { operation: "testOp" }
+      )
+    ).rejects.toThrow("failure on openai/gpt-oss-120b");
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+});
+

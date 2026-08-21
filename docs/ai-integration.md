@@ -3,7 +3,7 @@
 ## What this adds
 - **Natural-language command understanding** — "remind me to call mom
   tomorrow evening" instead of the rigid `remind me call mom in 18h`
-  syntax, via Groq's tool-calling on `llama-3.3-70b-versatile`.
+  syntax, via Groq's tool-calling on `openai/gpt-oss-120b` (with automatic fallback to `openai/gpt-oss-20b`).
 - **Multi-item requests** — "remind me to call mom tomorrow and also buy
   milk" creates BOTH items in one message. Groq's parallel tool-calling
   returns one tool call per distinct item; each is independently
@@ -20,17 +20,20 @@
 - **AI-written daily digest summaries** — the digest's raw bullet list
   can optionally be rewritten by Groq into 2-4 natural sentences (see
   "Digest summarization" below).
+- **Vision and image transcription** — photos or document screenshots sent on
+  Telegram/WhatsApp are transcribed using Groq's multimodal model
+  (`qwen/qwen3.6-27b`, with automatic fallback to `groq/compound`).
 - **Voice note transcription** (Telegram + WhatsApp) — a voice message is
   downloaded server-side, transcribed via Groq's Whisper
-  (`whisper-large-v3-turbo`), and the resulting text is run through the
+  (`whisper-large-v3-turbo`, with automatic fallback to `whisper-large-v3`), and the resulting text is run through the
   exact same `handleCommand` pipeline as typed text. Discord is not
   supported here: Discord bots don't receive voice-message attachments
   the way Telegram/WhatsApp do (Discord's voice is live-call audio, a
   different API surface entirely).
 
 ## Why Groq specifically
-Groq's inference is extremely fast (hundreds of tokens/sec) on Llama and
-GPT-OSS models with full tool/function-calling support, which is exactly
+Groq's inference is extremely fast (hundreds of tokens/sec) on GPT-OSS
+and Qwen models with full tool/function-calling support, which is exactly
 the shape of workload here — short, structured, low-latency intent
 extraction, not long-form generation. Their Services Agreement states
 inputs/outputs are not used for training and are not permanently

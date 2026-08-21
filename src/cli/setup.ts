@@ -143,7 +143,7 @@ ${dim("This will walk you through creating your .env file and deploying the bot.
   console.log(dim("  Leave blank to skip. Can be added later to .env.\n"));
 
   const groqKey = await prompt(rl, "Groq API key (for AI features)");
-  const groqModel = groqKey ? await prompt(rl, "Groq model", "llama-3.3-70b-versatile") : "";
+  const groqModel = groqKey ? await prompt(rl, "Groq model", "openai/gpt-oss-120b") : "";
 
   const jinaKey = await prompt(rl, "Jina API key (for semantic search)");
 
@@ -202,7 +202,12 @@ ${dim("This will walk you through creating your .env file and deploying the bot.
     ``,
     `# --- Groq ---`,
     `GROQ_API_KEY=${groqKey}`,
-    `GROQ_MODEL=${groqModel || "llama-3.3-70b-versatile"}`,
+    `GROQ_MODEL=${groqModel || "openai/gpt-oss-120b"}`,
+    `GROQ_FALLBACK_MODEL=openai/gpt-oss-20b`,
+    `GROQ_VISION_MODEL=qwen/qwen3.6-27b`,
+    `GROQ_VISION_FALLBACK_MODEL=groq/compound`,
+    `GROQ_AUDIO_MODEL=whisper-large-v3-turbo`,
+    `GROQ_AUDIO_FALLBACK_MODEL=whisper-large-v3`,
     `GROQ_MAX_CALLS_PER_HOUR=30`,
     ``,
     `# --- Jina ---`,

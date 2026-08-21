@@ -160,6 +160,44 @@ const SYSTEM_PROMPT = [
   "Never make up times, dates, or content.",
 ].join("\n");
 
+/**
+ * Helper to call Groq with automatic fallback to a secondary model if the primary model fails
+ * (e.g. rate limit 429, service 503, decommissioned model, or unavailable endpoint).
+ */
+export async function callWithModelFallback<T>(
+  primaryModel: string,
+  fallbackModel: string,
+  fn: (model: string) => Promise<T>,
+  context: { accountId?: string; operation: string }
+): Promise<T> {
+  try {
+    return await fn(primaryModel);
+  } catch (primaryErr) {
+    if (fallbackModel && fallbackModel !== primaryModel) {
+      logger.warn(
+        {
+          context: context.operation,
+          primaryModel,
+          fallbackModel,
+          accountId: context.accountId,
+          err: String(primaryErr),
+        },
+        "groq_primary_model_failed_trying_fallback"
+      );
+      try {
+        return await fn(fallbackModel);
+      } catch (fallbackErr) {
+        logError(`${context.operation}.fallback`, fallbackErr, {
+          fallbackModel,
+          accountId: context.accountId,
+        });
+        throw fallbackErr;
+      }
+    }
+    throw primaryErr;
+  }
+}
+
 /** Converts free-form user text into a structured intent via Groq
  * tool-calling. Optionally includes RAG context snippets (already
  * scoped to the caller's own account) for question-answering. Never
@@ -196,18 +234,24 @@ export async function interpretMessage(
       content: h.text,
     }));
 
-    const completion = await groqClient.chat.completions.create({
-      model: env.GROQ_MODEL,
-      messages: [
-        { role: "system", content: `${SYSTEM_PROMPT}\nCurrent time (ISO-8601): ${nowIso}${tzBlock}${contextBlock}` },
-        ...historyMessages,
-        { role: "user", content: message },
-      ],
-      tools: TOOLS,
-      parallel_tool_calls: false,
-      temperature: 0.7,
-      max_tokens: 800,
-    });
+    const completion = await callWithModelFallback(
+      env.GROQ_MODEL,
+      env.GROQ_FALLBACK_MODEL,
+      (model) =>
+        groqClient!.chat.completions.create({
+          model,
+          messages: [
+            { role: "system", content: `${SYSTEM_PROMPT}\nCurrent time (ISO-8601): ${nowIso}${tzBlock}${contextBlock}` },
+            ...historyMessages,
+            { role: "user", content: message },
+          ],
+          tools: TOOLS,
+          parallel_tool_calls: false,
+          temperature: 0.1,
+          max_tokens: 800,
+        }),
+      { accountId, operation: "interpretMessage" }
+    );
 
     const responseMessage = completion.choices[0]?.message;
     const textContent = responseMessage?.content?.trim() ?? "";
@@ -333,11 +377,17 @@ export async function transcribeAudio(accountId: string, audioBuffer: Buffer, fi
 
   try {
     const file = await toFile(audioBuffer, filename);
-    const transcription = await groqClient.audio.transcriptions.create({
-      model: "whisper-large-v3-turbo",
-      file,
-      response_format: "text",
-    });
+    const transcription = await callWithModelFallback(
+      env.GROQ_AUDIO_MODEL,
+      env.GROQ_AUDIO_FALLBACK_MODEL,
+      (model) =>
+        groqClient!.audio.transcriptions.create({
+          model,
+          file,
+          response_format: "text",
+        }),
+      { accountId, operation: "transcribeAudio" }
+    );
 
     const text = typeof transcription === "string" ? transcription : transcription.text;
     const trimmed = (text ?? "").trim();
@@ -393,21 +443,27 @@ export async function summarizeDigest(accountId: string, rawDigestText: string):
   }
 
   try {
-    const completion = await groqClient.chat.completions.create({
-      model: env.GROQ_MODEL,
-      messages: [
-        {
-          role: "system",
-          content:
-            "Rewrite the following structured daily summary as 2-4 short, natural sentences a person would actually want to read first thing in the morning. " +
-            "Do NOT invent, add, or infer any task, reminder, or note that isn't explicitly listed below. " +
-            "Do NOT add encouragement, advice, or commentary beyond what's given. If the input says nothing is due, say that plainly and briefly.",
-        },
-        { role: "user", content: rawDigestText },
-      ],
-      temperature: 0.3,
-      max_tokens: 220,
-    });
+    const completion = await callWithModelFallback(
+      env.GROQ_MODEL,
+      env.GROQ_FALLBACK_MODEL,
+      (model) =>
+        groqClient!.chat.completions.create({
+          model,
+          messages: [
+            {
+              role: "system",
+              content:
+                "Rewrite the following structured daily summary as 2-4 short, natural sentences a person would actually want to read first thing in the morning. " +
+                "Do NOT invent, add, or infer any task, reminder, or note that isn't explicitly listed below. " +
+                "Do NOT add encouragement, advice, or commentary beyond what's given. If the input says nothing is due, say that plainly and briefly.",
+            },
+            { role: "user", content: rawDigestText },
+          ],
+          temperature: 0.3,
+          max_tokens: 220,
+        }),
+      { accountId, operation: "summarizeDigest" }
+    );
 
     const summary = completion.choices[0]?.message?.content?.trim();
     if (!summary) return { ok: false, reason: "provider_error" };
@@ -424,9 +480,8 @@ export type ImageResult =
   | { ok: false; reason: "not_configured" | "rate_limited" | "provider_error" };
 
 /**
- * Sends an image to Groq's vision model (llama-3.2-11b-vision-preview)
- * and returns the textual content extracted from it. Uses the same two-
- * layer opt-in gate as every other AI feature.
+ * Sends an image to Groq's vision model and returns the textual content extracted from it.
+ * Uses the same two-layer opt-in gate as every other AI feature.
  */
 export async function transcribeImage(accountId: string, imageBuffer: Buffer, mimeType: string): Promise<ImageResult> {
   if (!groqClient) {
@@ -442,23 +497,29 @@ export async function transcribeImage(accountId: string, imageBuffer: Buffer, mi
     const base64 = imageBuffer.toString("base64");
     const dataUrl = `data:${mimeType};base64,${base64}`;
 
-    const completion = await groqClient.chat.completions.create({
-      model: "llama-3.2-11b-vision-preview",
-      messages: [
-        {
-          role: "user",
-          content: [
+    const completion = await callWithModelFallback(
+      env.GROQ_VISION_MODEL,
+      env.GROQ_VISION_FALLBACK_MODEL,
+      (model) =>
+        groqClient!.chat.completions.create({
+          model,
+          messages: [
             {
-              type: "text",
-              text: "Extract all the text content from this image accurately. If it's a document, whiteboard, or handwritten note, transcribe it faithfully. If it's a photo with no text, describe what you see briefly.",
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: "Extract all the text content from this image accurately. If it's a document, whiteboard, or handwritten note, transcribe it faithfully. If it's a photo with no text, describe what you see briefly.",
+                },
+                { type: "image_url", image_url: { url: dataUrl } },
+              ],
             },
-            { type: "image_url", image_url: { url: dataUrl } },
           ],
-        },
-      ],
-      temperature: 0.2,
-      max_tokens: 1000,
-    });
+          temperature: 0.2,
+          max_tokens: 1000,
+        }),
+      { accountId, operation: "transcribeImage" }
+    );
 
     const text = completion.choices[0]?.message?.content?.trim();
     if (!text) return { ok: false, reason: "provider_error" };

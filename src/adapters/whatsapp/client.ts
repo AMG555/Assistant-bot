@@ -11,6 +11,7 @@ export async function downloadWhatsAppMedia(mediaId: string): Promise<Buffer | n
   try {
     const metaRes = await fetch(`${GRAPH_BASE}/${mediaId}`, {
       headers: { Authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}` },
+      signal: AbortSignal.timeout(8000),
     });
     if (!metaRes.ok) throw new Error(`media lookup failed: ${metaRes.status}`);
     const meta = (await metaRes.json()) as { url?: string };
@@ -18,6 +19,7 @@ export async function downloadWhatsAppMedia(mediaId: string): Promise<Buffer | n
 
     const fileRes = await fetch(meta.url, {
       headers: { Authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}` },
+      signal: AbortSignal.timeout(12000),
     });
     if (!fileRes.ok) throw new Error(`media download failed: ${fileRes.status}`);
 
@@ -43,6 +45,7 @@ export async function sendWhatsAppText(toPhone: string, text: string): Promise<b
         type: "text",
         text: { body: text },
       }),
+      signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) throw new Error(`WhatsApp send failed: ${res.status}`);
     return true;

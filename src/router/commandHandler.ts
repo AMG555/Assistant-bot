@@ -666,8 +666,10 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
         return { kind: "text", text: "AI is off for your account. Send \"ai on\" to turn it on." };
       }
 
-      await recordExchange(accountId, "user", text);
-      const history = (await getConversationHistory(accountId, 6)).slice(0, -1);
+      const [history] = await Promise.all([
+        getConversationHistory(accountId, 6).then((h) => h.slice(0, -1)),
+        recordExchange(accountId, "user", text),
+      ]);
       const result = await answerQuestionWithRag(accountId, question, history);
       if (!result.ok) {
         return { kind: "text", text: "Sorry, I couldn't reach the AI service. Try again in a bit." };
@@ -777,11 +779,13 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
     if (isGroqConfigured) {
       const aiEnabled = await isAiEnabledForAccount(accountId);
       if (aiEnabled) {
-        await recordExchange(accountId, "user", text);
-        const history = (await getConversationHistory(accountId, 6)).slice(0, -1);
-        const retrieval = await retrieveRelevantNotes(accountId, text, 5);
+        const [history, retrieval, timezone] = await Promise.all([
+          getConversationHistory(accountId, 6).then((h) => h.slice(0, -1)),
+          retrieveRelevantNotes(accountId, text, 5),
+          getAccountTimeZone(accountId),
+          recordExchange(accountId, "user", text),
+        ]);
         const snippets = retrieval.ok ? retrieval.data.map((n) => `${n.title}: ${n.body}`) : [];
-        const timezone = await getAccountTimeZone(accountId);
         const aiResult = await interpretMessage(accountId, text, new Date().toISOString(), snippets, history, timezone);
 
         if (aiResult.ok) {
@@ -808,6 +812,11 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
             void maybeSummarizeOldConversation(accountId, await countExchanges(accountId));
             return { kind: "text", text: replyText };
           }
+        } else {
+          if (aiResult.reason === "rate_limited") {
+            return { kind: "text", text: "You've sent a lot of AI requests recently — please give it a moment before trying again." };
+          }
+          return { kind: "text", text: "Sorry, I had trouble reaching the AI service right now. Please try again in a few moments." };
         }
       } else {
         return { kind: "text", text: `AI is off for your account, so I can only follow specific commands. Try "help" to see what I can do, or send "ai on" to chat freely.` };

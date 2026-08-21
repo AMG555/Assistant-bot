@@ -44,17 +44,17 @@ How the bot is built, how the layers connect, and how to extend it.
                                                   │          │         │
             ┌──────────────────────────┐  ┌───────▼──┐ ┌──────▼──┐ ┌──▼────────┐
             │     External Integrations│  │ Supabase │ │  Groq   │ │   Jina    │
-            │                          │  │ (PG +     │ │(Llama 3  │ │(Embeddings│
-            │  ┌──────┐  ┌───────────┐ │  │  Storage) │ │ 70B /    │ │ 256-dim)  │
-            │  │Notion│  │ Webhook   │ │  │           │ │ Whisper) │ │           │
-            │  │OAuth │  │ Inbox     │ │  │ Tables:   │ │          │ │           │
-            │  │+ Sync│  │(external  │ │  │ accounts  │ │          │ │           │
-            │  └──────┘  │ POST)     │ │  │ notes     │ │          │ │           │
-            │            └───────────┘ │  │ tasks     │ │          │ │           │
-            │                          │  │ reminders │ │          │ │           │
-            │                          │  │ conv_hist │ │          │ │           │
-            │                          │  │ activity  │ │          │ │           │
-            └──────────────────────────┘  └───────────┘ └──────────┘ └───────────┘
+            │                          │  │ (PG +     │ │(GPT-OSS │ │(Embeddings│
+            │  ┌──────┐  ┌───────────┐ │  │  Storage) │ │ 120B/20B│ │ 256-dim)  │
+            │  │Notion│  │ Webhook   │ │  │           │ │ Whisper)│ │           │
+            │  │OAuth │  │ Inbox     │ │  │ Tables:   │ │         │ │           │
+            │  │+ Sync│  │(external  │ │  │ accounts  │ │         │ │           │
+            │  └──────┘  │ POST)     │ │  │ notes     │ │         │ │           │
+            │            └───────────┘ │  │ tasks     │ │         │ │           │
+            │                          │  │ reminders │ │         │ │           │
+            │                          │  │ conv_hist │ │         │ │           │
+            │                          │  │ activity  │ │         │ │           │
+            └──────────────────────────┘  └───────────┘ └─────────┘ └───────────┘
 
 **Key principle:** Every layer only talks to the one below it. Adapters never touch the database. Services never format a message. The command handler never knows if the user is on Telegram or Discord.
 
@@ -111,7 +111,7 @@ Each service file owns one domain and only talks to Supabase or external APIs:
 | `notesService.ts` | CRUD notes |
 | `tasksService.ts` | CRUD tasks |
 | `remindersService.ts` | CRUD reminders, dispatch, acknowledgment |
-| `aiService.ts` | Groq chat, transcription, vision, digest summarization |
+| `aiService.ts` | Groq chat (GPT-OSS 120B/20B), vision (Qwen 3.6 27B), transcription (Whisper), digest summarization, multi-model fallback |
 | `ragService.ts` | Note retrieval (full-text or semantic search) |
 | `chartService.ts` | Activity chart rendering |
 | `notionSyncService.ts` | Two-way Notion sync |

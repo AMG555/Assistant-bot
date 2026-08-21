@@ -21,27 +21,47 @@ cronRouter.post("/internal/cron/dispatch", verifyCronSecret, async (_req, res) =
       return res.status(500).json({ error: dueResult.error });
     }
 
+    const BATCH_SIZE = 5;
     let sent = 0;
     let failed = 0;
 
-    for (const reminder of dueResult.data) {
-      const shortId = reminder.id.slice(0, 8);
-      const scheduledAt = new Date(reminder.remindAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-      const recurrenceNote = reminder.recurrenceRule !== "none" ? ` | Repeats ${reminder.recurrenceRule}` : "";
-      const msg = reminder.isAlarm
-        ? `🔔 ALARM: ${reminder.message}\n   Repeats every 5min until you say "acknowledge ${shortId}"`
-        : `⏰ ${reminder.message}\n   ${scheduledAt}${recurrenceNote} | acknowledge ${shortId} to dismiss`;
-      const delivered = await deliverToAccount(reminder.accountId, msg);
-      if (delivered) {
-        if (reminder.isAlarm) {
-          await markAlarmDelivered(reminder.id);
+    for (let i = 0; i < dueResult.data.length; i += BATCH_SIZE) {
+      const chunk = dueResult.data.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(
+        chunk.map(async (reminder) => {
+          const shortId = reminder.id.slice(0, 8);
+          const scheduledAt = new Date(reminder.remindAt).toLocaleString("en-US", {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          });
+          const recurrenceNote = reminder.recurrenceRule !== "none" ? ` | Repeats ${reminder.recurrenceRule}` : "";
+          const msg = reminder.isAlarm
+            ? `🔔 ALARM: ${reminder.message}\n   Repeats every 5min until you say "acknowledge ${shortId}"`
+            : `⏰ ${reminder.message}\n   ${scheduledAt}${recurrenceNote} | acknowledge ${shortId} to dismiss`;
+
+          const delivered = await deliverToAccount(reminder.accountId, msg);
+          if (delivered) {
+            if (reminder.isAlarm) {
+              await markAlarmDelivered(reminder.id);
+            } else {
+              await markReminderSent(reminder.id, reminder.accountId, reminder.message, reminder.recurrenceRule, reminder.remindAt);
+            }
+            return true;
+          } else {
+            await markReminderFailedAttempt(reminder.id, reminder.deliveryAttempts, "No reachable platform identity or send failed");
+            return false;
+          }
+        })
+      );
+
+      for (const r of results) {
+        if (r.status === "fulfilled" && r.value) {
+          sent += 1;
         } else {
-          await markReminderSent(reminder.id, reminder.accountId, reminder.message, reminder.recurrenceRule, reminder.remindAt);
+          failed += 1;
         }
-        sent += 1;
-      } else {
-        await markReminderFailedAttempt(reminder.id, reminder.deliveryAttempts, "No reachable platform identity or send failed");
-        failed += 1;
       }
     }
 

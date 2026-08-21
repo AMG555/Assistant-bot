@@ -9,6 +9,27 @@ export type ServiceResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string; code: "not_found" | "conflict" | "expired" | "internal" };
 
+interface CacheEntry<T> {
+  value: T;
+  expiresAt: number;
+}
+
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const identityCache = new Map<string, CacheEntry<string>>();
+const aiEnabledCache = new Map<string, CacheEntry<boolean>>();
+const timezoneCache = new Map<string, CacheEntry<string>>();
+
+export function clearAccountCache(accountId?: string): void {
+  if (accountId) {
+    aiEnabledCache.delete(accountId);
+    timezoneCache.delete(accountId);
+  } else {
+    identityCache.clear();
+    aiEnabledCache.clear();
+    timezoneCache.clear();
+  }
+}
+
 /**
  * Resolves (or lazily creates) the account behind a given platform
  * identity. This is the ONLY place a new account gets created, which
@@ -20,6 +41,12 @@ export async function resolveOrCreateAccount(
   platformUserId: string,
   displayName?: string
 ): Promise<ServiceResult<{ accountId: string }>> {
+  const cacheKey = `${platform}:${platformUserId}`;
+  const cached = identityCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return { ok: true, data: { accountId: cached.value } };
+  }
+
   try {
     const { data: existing, error: lookupError } = await supabaseAdmin
       .from("platform_identities")
@@ -29,7 +56,10 @@ export async function resolveOrCreateAccount(
       .maybeSingle();
 
     if (lookupError) throw lookupError;
-    if (existing) return { ok: true, data: { accountId: existing.account_id } };
+    if (existing) {
+      identityCache.set(cacheKey, { value: existing.account_id, expiresAt: Date.now() + CACHE_TTL_MS });
+      return { ok: true, data: { accountId: existing.account_id } };
+    }
 
     const { data: account, error: accountError } = await supabaseAdmin
       .from("accounts")
@@ -46,6 +76,7 @@ export async function resolveOrCreateAccount(
     });
     if (identityError) throw identityError;
 
+    identityCache.set(cacheKey, { value: account.id, expiresAt: Date.now() + CACHE_TTL_MS });
     return { ok: true, data: { accountId: account.id } };
   } catch (err) {
     logError("resolveOrCreateAccount", err, { platform });
@@ -57,6 +88,11 @@ export async function resolveOrCreateAccount(
  * Defaults closed (false) on any lookup failure — an error here must
  * never accidentally enable sending a user's data to a third party. */
 export async function isAiEnabledForAccount(accountId: string): Promise<boolean> {
+  const cached = aiEnabledCache.get(accountId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+
   try {
     const { data, error } = await supabaseAdmin
       .from("accounts")
@@ -64,7 +100,9 @@ export async function isAiEnabledForAccount(accountId: string): Promise<boolean>
       .eq("id", accountId)
       .single();
     if (error) throw error;
-    return Boolean(data?.ai_enabled);
+    const enabled = Boolean(data?.ai_enabled);
+    aiEnabledCache.set(accountId, { value: enabled, expiresAt: Date.now() + CACHE_TTL_MS });
+    return enabled;
   } catch (err) {
     logError("isAiEnabledForAccount", err, { accountId });
     return false;
@@ -75,6 +113,7 @@ export async function setAiEnabledForAccount(accountId: string, enabled: boolean
   try {
     const { error } = await supabaseAdmin.from("accounts").update({ ai_enabled: enabled }).eq("id", accountId);
     if (error) throw error;
+    aiEnabledCache.set(accountId, { value: enabled, expiresAt: Date.now() + CACHE_TTL_MS });
     return { ok: true, data: null };
   } catch (err) {
     logError("setAiEnabledForAccount", err, { accountId });
@@ -85,10 +124,17 @@ export async function setAiEnabledForAccount(accountId: string, enabled: boolean
 /** Defaults to "UTC" on any lookup failure — never silently applies an
  * unvalidated or stale timezone. */
 export async function getAccountTimeZone(accountId: string): Promise<string> {
+  const cached = timezoneCache.get(accountId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+
   try {
     const { data, error } = await supabaseAdmin.from("accounts").select("timezone").eq("id", accountId).single();
     if (error) throw error;
-    return data?.timezone || "UTC";
+    const tz = data?.timezone || "UTC";
+    timezoneCache.set(accountId, { value: tz, expiresAt: Date.now() + CACHE_TTL_MS });
+    return tz;
   } catch (err) {
     logError("getAccountTimeZone", err, { accountId });
     return "UTC";
@@ -99,6 +145,7 @@ export async function setAccountTimeZone(accountId: string, timeZone: string): P
   try {
     const { error } = await supabaseAdmin.from("accounts").update({ timezone: timeZone }).eq("id", accountId);
     if (error) throw error;
+    timezoneCache.set(accountId, { value: timeZone, expiresAt: Date.now() + CACHE_TTL_MS });
     return { ok: true, data: null };
   } catch (err) {
     logError("setAccountTimeZone", err, { accountId });
@@ -205,6 +252,7 @@ export async function consumeLinkCode(
     );
     if (upsertError) throw upsertError;
 
+    identityCache.set(`${platform}:${platformUserId}`, { value: match.account_id, expiresAt: Date.now() + CACHE_TTL_MS });
     return { ok: true, data: { accountId: match.account_id } };
   } catch (err) {
     logError("consumeLinkCode", err, { platform });
