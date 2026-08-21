@@ -812,6 +812,11 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
             void maybeSummarizeOldConversation(accountId, await countExchanges(accountId));
             return { kind: "text", text: replyText };
           }
+        } else {
+          if (aiResult.reason === "rate_limited") {
+            return { kind: "text", text: "You've sent a lot of AI requests recently — please give it a moment before trying again." };
+          }
+          return { kind: "text", text: "Sorry, I had trouble reaching the AI service right now. Please try again in a few moments." };
         }
       } else {
         return { kind: "text", text: `AI is off for your account, so I can only follow specific commands. Try "help" to see what I can do, or send "ai on" to chat freely.` };
