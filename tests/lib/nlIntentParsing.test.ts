@@ -81,6 +81,23 @@ describe("parseToolCall — NL intent parsing pipeline", () => {
     });
   });
 
+  describe("set_timezone", () => {
+    it("parses a valid timezone intent", () => {
+      const result = parseToolCall("set_timezone", JSON.stringify({ timeZone: "Asia/Kolkata" }));
+      expect(result).toEqual({ type: "set_timezone", timeZone: "Asia/Kolkata" });
+    });
+
+    it("normalizes shorthand timezone alias", () => {
+      const result = parseToolCall("set_timezone", JSON.stringify({ timeZone: "IST" }));
+      expect(result).toEqual({ type: "set_timezone", timeZone: "Asia/Kolkata" });
+    });
+
+    it("returns unrecognized for invalid timezone", () => {
+      const result = parseToolCall("set_timezone", JSON.stringify({ timeZone: "Invalid/Zone" }));
+      expect(result.type).toBe("unrecognized");
+    });
+  });
+
   describe("error handling", () => {
     it("returns unrecognized for invalid JSON", () => {
       const result = parseToolCall("create_note", "{broken json}");

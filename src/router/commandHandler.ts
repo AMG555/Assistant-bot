@@ -170,14 +170,26 @@ function friendlyTime(iso: string, tz?: string): string {
     const abs = Math.abs(diffMs);
     const isPast = diffMs < 0;
 
-    if (abs < 60000) return isPast ? "just now" : "in less than a minute";
+    let clockTime = "";
+    try {
+      clockTime = d.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+        ...(tz ? { timeZone: tz } : {}),
+      });
+    } catch {}
+
+    const clockPrefix = clockTime ? `at ${clockTime} ` : "";
+
+    if (abs < 60000) return `${clockPrefix}(${isPast ? "just now" : "in <1m"})`.trim();
     if (abs < 3600000) {
       const m = Math.round(abs / 60000);
-      return isPast ? `${m}m ago` : `in ${m}m`;
+      return `${clockPrefix}(${isPast ? `${m}m ago` : `in ${m}m`})`.trim();
     }
     if (abs < 86400000) {
       const h = Math.round(abs / 3600000);
-      return isPast ? `${h}h ago` : `in ${h}h`;
+      return `${clockPrefix}(${isPast ? `${h}h ago` : `in ${h}h`})`.trim();
     }
     return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", ...(tz ? { timeZone: tz } : {}) });
   } catch {
@@ -808,11 +820,11 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
             let replyText: string;
             if (chatIntent && !isToolDescription) {
               for (const intent of toolIntents) {
-                await executeAiIntent(accountId, intent);
+                await executeAiIntent(accountId, intent, timezone);
               }
               replyText = chatIntent.text;
             } else {
-              const results = await Promise.all(toolIntents.map((i) => executeAiIntent(accountId, i)));
+              const results = await Promise.all(toolIntents.map((i) => executeAiIntent(accountId, i, timezone)));
               replyText = results.join("\n");
             }
 
@@ -864,7 +876,7 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
  * — this function does not weaken that guarantee, it only changes how
  * many times it's invoked per incoming message.
  */
-async function executeAiIntent(accountId: string, intent: AiIntent): Promise<string> {
+async function executeAiIntent(accountId: string, intent: AiIntent, userTz?: string): Promise<string> {
   switch (intent.type) {
     case "create_note": {
       const validation = safeValidate(createNoteSchema, {
@@ -910,8 +922,13 @@ async function executeAiIntent(accountId: string, intent: AiIntent): Promise<str
       const result = await createReminder(accountId, validation.data);
       if (!result.ok) return `⚠ ${result.error}`;
 
+      const isDefaultUtc = !userTz || userTz === "UTC";
+      const tzHint = isDefaultUtc
+        ? `\n💡 Timezone is set to UTC. If this time looks wrong, send: timezone <your city or IST>`
+        : "";
+
       const recurrenceNote = validation.data.recurrence === "none" ? "" : `, repeats ${validation.data.recurrence}`;
-      return `Got it — "${validation.data.message}" ${friendlyTime(validation.data.remindAt.toISOString())}${recurrenceNote}. Use acknowledge ${shortId(result.data.id)} to dismiss when done.`;
+      return `Got it — "${validation.data.message}" ${friendlyTime(validation.data.remindAt.toISOString(), userTz)}${recurrenceNote}.${tzHint}\nUse acknowledge ${shortId(result.data.id)} to dismiss when done.`;
     }
     case "create_alarm": {
       const remindAt = new Date(intent.remindAt);
@@ -926,7 +943,12 @@ async function executeAiIntent(accountId: string, intent: AiIntent): Promise<str
       const result = await createReminder(accountId, validation.data);
       if (!result.ok) return `⚠ ${result.error}`;
 
-      return `🔔 Alarm set — "${validation.data.message}" at ${friendlyTime(remindAt.toISOString())}. I'll keep repeating until you say acknowledge ${shortId(result.data.id)}.`;
+      return `🔔 Alarm set — "${validation.data.message}" ${friendlyTime(remindAt.toISOString(), userTz)}. I'll keep repeating until you say acknowledge ${shortId(result.data.id)}.`;
+    }
+    case "set_timezone": {
+      const result = await setAccountTimeZone(accountId, intent.timeZone);
+      if (!result.ok) return `⚠ ${result.error}`;
+      return `Got it! Your timezone has been updated to ${intent.timeZone}.`;
     }
     case "answer_question":
       return intent.answer;

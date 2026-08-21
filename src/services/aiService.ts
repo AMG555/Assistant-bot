@@ -9,6 +9,7 @@ import {
   createNoteSchema,
   createTaskSchema,
   createReminderSchema,
+  setTimezoneSchema,
   safeValidate,
 } from "../validation/schemas.js";
 
@@ -20,13 +21,18 @@ import {
  *      (b) a handful of already-retrieved, already-account-scoped note
  *          snippets (from ragService, which enforces scoping in SQL).
  *    It never receives another user's data, a bulk export, or raw table
- *    contents.
- * 2. Groq NEVER mutates anything directly. Every "action" it proposes
- *    comes back as a tool_call with JSON arguments, which is then
- *    re-validated through the EXACT SAME Zod schemas used for manually
- *    typed commands (src/validation/schemas.ts) before it ever reaches
- *    a service function. A prompt-injected or hallucinated tool call can
- *    at worst fail validation — it cannot bypass it.
+ * Translates natural-language user messages into typed, validated
+ * domain actions via Groq tool-calling (function calling).
+ *
+ * Core architectural guarantees:
+ * 1. AI is strictly a translation/interpretation layer. It NEVER writes
+ *    directly to the database. Every tool call Groq produces is parsed
+ *    into an AiIntent and piped back through the same Zod-validated
+ *    service layer (notesService, tasksService, remindersService) as
+ *    rigid slash commands.
+ * 2. If Groq hallucinates invalid arguments (e.g. an unparseable ISO
+ *    date), the Zod schema fails and the intent is marked "unrecognized"
+ *    rather than executing corrupt state.
  * 3. This entire layer is opt-in twice over: the server must have
  *    GROQ_API_KEY configured (isGroqConfigured), AND the account must
  *    have explicitly run "ai on" (checked by the caller before invoking
@@ -40,6 +46,7 @@ export type AiIntent =
   | { type: "create_task"; title: string; dueAt?: string }
   | { type: "create_reminder"; message: string; remindAt: string; recurrence: RecurrenceRule }
   | { type: "create_alarm"; message: string; remindAt: string }
+  | { type: "set_timezone"; timeZone: string }
   | { type: "answer_question"; answer: string }
   | { type: "chat"; text: string }
   | { type: "unrecognized" };
@@ -92,12 +99,12 @@ const TOOLS: Groq.Chat.Completions.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "create_reminder",
-      description: "Schedule a reminder when the user wants to be reminded of something at a specific future time.",
+      description: "Schedule a reminder when the user wants to be reminded of something at a specific future time. Always calculate remindAtIso based on the user's current local time and timezone.",
       parameters: {
         type: "object",
         properties: {
           message: { type: "string", description: "What to remind the user about" },
-          remindAtIso: { type: "string", description: "ISO-8601 timestamp of when to send the reminder" },
+          remindAtIso: { type: "string", description: "ISO-8601 timestamp in UTC of when to send the reminder" },
           recurrence: {
             type: "string",
             enum: ["none", "daily", "weekly", "monthly"],
@@ -118,9 +125,27 @@ const TOOLS: Groq.Chat.Completions.ChatCompletionTool[] = [
         type: "object",
         properties: {
           message: { type: "string", description: "What to alarm the user about" },
-          remindAtIso: { type: "string", description: "ISO-8601 timestamp of when to fire the alarm" },
+          remindAtIso: { type: "string", description: "ISO-8601 timestamp in UTC of when to fire the alarm" },
         },
         required: ["message", "remindAtIso"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "set_timezone",
+      description:
+        "Set or update the user's timezone when they mention their country, city, timezone, or their current local clock time (e.g. 'I am in India', 'my time is 3:27pm', 'timezone IST', 'I live in London', 'it is 4pm here').",
+      parameters: {
+        type: "object",
+        properties: {
+          timeZone: {
+            type: "string",
+            description: "An IANA timezone name or standard abbreviation (e.g. 'Asia/Kolkata', 'America/New_York', 'Europe/London', 'IST', 'EST')",
+          },
+        },
+        required: ["timeZone"],
       },
     },
   },
@@ -154,10 +179,12 @@ const SYSTEM_PROMPT = [
   "7. If the user asks about their schedule, day, agenda, or what's happening today, check if any recent messages or notes contain that info and answer conversationally. Don't say you 'can't access' anything — just respond naturally.",
   "8. Never re-process old requests from conversation history. Only respond to the current user message. If the user just says 'hi' or a greeting, just greet them back — don't create reminders or notes.",
   "9. When the user asks a confirmation, check, or conversational follow-up (e.g. 'so you will properly remind me right?', 'did you set it?', 'is that saved?'), answer conversationally (e.g. 'Yes, you're all set for 3 PM!'). DO NOT call create_reminder, create_task, or create_note again.",
+  "10. When the user mentions their location, country, city, or current clock time (e.g. 'I am in India', 'the time is 3:27pm', 'timezone IST', 'it is 4pm here'), invoke set_timezone with their timezone name (e.g. Asia/Kolkata for India). If they also asked for a reminder in the same turn, calculate remindAtIso using their newly mentioned timezone.",
   "",
   "For recurring things: if the user says 'every day'/'every week'/'every month' or a specific day like 'every 10th'/'every 1st'/'every 15th', repeat monthly. Set remindAtIso to the next occurrence of that day. Otherwise one-time.",
   "For alarms: use when the user says 'alarm', 'alarm me', 'wake me up', or anything urgent. Alarms repeat until acknowledged.",
   "For reminders about events (meeting, appointment, call, doctor, etc.): set remindAtIso to 15 minutes before the event so the user gets a heads-up.",
+  "Always convert times to absolute UTC ISO-8601 timestamps using the user's current local time and timezone.",
   "Never make up times, dates, or content.",
 ].join("\n");
 
@@ -222,7 +249,20 @@ export async function interpretMessage(
   }
 
   try {
-    const tzBlock = timezone ? `\nUser's timezone: ${timezone}` : "";
+    let tzBlock = "";
+    if (timezone) {
+      try {
+        const localTimeStr = new Intl.DateTimeFormat("en-US", {
+          timeZone: timezone,
+          dateStyle: "full",
+          timeStyle: "short",
+        }).format(new Date(nowIso));
+        tzBlock = `\nUser's timezone: ${timezone}\nUser's current local time: ${localTimeStr}`;
+      } catch {
+        tzBlock = `\nUser's timezone: ${timezone}`;
+      }
+    }
+
     const contextBlock =
       contextSnippets.length > 0
         ? `\n\nRelevant notes from this user's account:\n${contextSnippets
@@ -242,7 +282,7 @@ export async function interpretMessage(
         groqClient!.chat.completions.create({
           model,
           messages: [
-            { role: "system", content: `${SYSTEM_PROMPT}\nCurrent time (ISO-8601): ${nowIso}${tzBlock}${contextBlock}` },
+            { role: "system", content: `${SYSTEM_PROMPT}\nCurrent time (ISO-8601 UTC): ${nowIso}${tzBlock}${contextBlock}` },
             ...historyMessages,
             { role: "user", content: message },
           ],
@@ -340,6 +380,12 @@ export function parseToolCall(name: string, rawArgs: string): AiIntent {
       if (!message || !remindAt) return { type: "unrecognized" };
       if (remindAt.getTime() <= Date.now()) return { type: "unrecognized" };
       return { type: "create_alarm", message: message.slice(0, 500), remindAt: remindAt.toISOString() };
+    }
+    case "set_timezone": {
+      const timeZone = String(args.timeZone ?? "").trim();
+      const validation = safeValidate(setTimezoneSchema, { timeZone });
+      if (!validation.ok) return { type: "unrecognized" };
+      return { type: "set_timezone", timeZone: validation.data.timeZone };
     }
     case "answer_question": {
       const answer = String(args.answer ?? "").trim();
