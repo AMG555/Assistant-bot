@@ -247,7 +247,7 @@ export async function interpretMessage(
           ],
           tools: TOOLS,
           parallel_tool_calls: false,
-          temperature: 0.7,
+          temperature: 0.1,
           max_tokens: 800,
         }),
       { accountId, operation: "interpretMessage" }

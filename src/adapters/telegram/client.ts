@@ -27,6 +27,16 @@ export async function sendTelegramMessage(chatId: string | number, text: string,
   return callTelegram("sendMessage", body);
 }
 
+export type TelegramChatAction = "typing" | "upload_photo" | "record_voice" | "upload_document";
+
+/**
+ * Sends a chat action (like "typing" or "upload_photo") so the user sees immediate
+ * visual feedback while asynchronous processing or LLM inference runs.
+ */
+export async function sendTelegramChatAction(chatId: string | number, action: TelegramChatAction = "typing"): Promise<boolean> {
+  return callTelegram("sendChatAction", { chat_id: chatId, action });
+}
+
 /** Resolves a Telegram file_id into a downloadable Buffer. Telegram's
  * getFile only returns a relative path valid for a short time — this
  * wraps both steps (resolve path, then download bytes) into one call so

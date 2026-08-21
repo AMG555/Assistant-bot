@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { verifyTelegramWebhook } from "../../middleware/verifyTelegram.js";
 import { handleCommand } from "../../router/commandHandler.js";
-import { sendTelegramMessage, sendTelegramPhoto, downloadTelegramFile } from "./client.js";
+import { sendTelegramMessage, sendTelegramPhoto, downloadTelegramFile, sendTelegramChatAction } from "./client.js";
 import { logError, logger } from "../../lib/logger.js";
 import { checkRateLimit } from "../../middleware/rateLimit.js";
 import { isGroqConfigured } from "../../config/env.js";
@@ -42,6 +42,9 @@ telegramRouter.post("/webhook", verifyTelegramWebhook, async (req, res) => {
       await sendTelegramMessage(chatId, "Whoa, slow down! You're sending messages too quickly — give it a moment between each one.");
       return;
     }
+
+    // Fire typing indicator immediately for fast visual feedback
+    void sendTelegramChatAction(chatId, "typing");
 
     let inputText: string | undefined = message.text;
     let resolvedAccountId: string | undefined;
