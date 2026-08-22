@@ -59,6 +59,12 @@ export function parseRelativeDurationMs(input: string): number | null {
 export function parseWhen(input: string, timeZone = "UTC"): Date | null {
   const trimmed = input.trim();
 
+  // Block invalid patterns: "in" followed by clock time (e.g. "in 5am", "in 10pm")
+  // These should be "at 5am" instead. Return null to force caller to handle.
+  if (/^in\s+\d{1,2}\s*(am|pm)$/i.test(trimmed)) {
+    return null;
+  }
+
   const relativeMatch = trimmed.match(RELATIVE_PATTERN);
   if (relativeMatch) {
     const durationMs = parseRelativeDurationMs(`${relativeMatch[1]}${relativeMatch[2]}`);
