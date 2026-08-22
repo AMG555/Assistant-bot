@@ -180,6 +180,8 @@ const SYSTEM_PROMPT = [
   "8. Never re-process old requests from conversation history. Only respond to the current user message. If the user just says 'hi' or a greeting, just greet them back — don't create reminders or notes.",
   "9. When the user asks a confirmation, check, or conversational follow-up (e.g. 'so you will properly remind me right?', 'did you set it?', 'is that saved?'), answer conversationally (e.g. 'Yes, you're all set for 3 PM!'). DO NOT call create_reminder, create_task, or create_note again.",
   "10. When the user mentions their location, country, city, or current clock time (e.g. 'I am in India', 'the time is 3:27pm', 'timezone IST', 'it is 4pm here'), invoke set_timezone with their timezone name (e.g. Asia/Kolkata for India). If they also asked for a reminder in the same turn, calculate remindAtIso using their newly mentioned timezone.",
+  "11. For reminders: 'in' requires a duration (10m, 2h, 1d), NOT a clock time. 'Remind me in 5am' means 'at 5am', not 'in 5 hours'. Parse 'in <number>am/pm' as 'at <number>am/pm'.",
+  "12. When user says just 'remind me in <time>' without a message, ask what to remind them about. Don't create a reminder with message 'Reminder' or 'remind me'.",
   "",
   "For recurring things: if the user says 'every day'/'every week'/'every month' or a specific day like 'every 10th'/'every 1st'/'every 15th', repeat monthly. Set remindAtIso to the next occurrence of that day. Otherwise one-time.",
   "For alarms: use when the user says 'alarm', 'alarm me', 'wake me up', or anything urgent. Alarms repeat until acknowledged.",
