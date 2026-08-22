@@ -94,7 +94,9 @@ const HELP_TEXT = [
   "  remind me <msg> at <9am> [every day|week|month] — clock-time reminder, optionally recurring",
   "  alarm <msg> in <10m|2h> — important reminder, re-sent every 5min until acknowledged",
   "  acknowledge <id> — stop an alarm from repeating",
+  "  acknowledge all — dismiss all pending reminders",
   "  reminders — list pending reminders",
+  "  clear reminders — delete all pending reminders",
   "  snooze <id> <10m|2h|1d> — push a reminder back",
   "",
   "⚙️  Settings",
@@ -153,8 +155,10 @@ const GUIDE_TEXT = [
   "",
   "🔧  Managing",
   "  acknowledge <id> — dismiss a reminder",
+  "  acknowledge all — dismiss all reminders",
   "  snooze <id> 30m — delay a reminder",
   "  reminders — list all pending",
+  "  clear reminders — delete all pending",
   "  undo — undo the last action",
   "",
   "🎤  Voice messages work too, in any language.",
@@ -288,11 +292,37 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
       // Check if user has pending reminders that may be scheduled with wrong timezone
       const pendingReminders = await listPendingReminders(accountId, 50);
       const hasReminders = pendingReminders.ok && pendingReminders.data.length > 0;
-      const reminderWarning = hasReminders
-        ? `\n\n⚠️ Note: You have ${pendingReminders.data.length} pending reminder(s). These were scheduled with your old timezone and won't be updated automatically. Type 'reminders' to review them.`
-        : "";
+      
+      if (hasReminders) {
+        const count = pendingReminders.data.length;
+        const userTz = validation.data.timeZone;
+        const reminderList = pendingReminders.data
+          .slice(0, 5)
+          .map((r) => `  • ${r.message} ${friendlyTime(r.remindAt, userTz)}`)
+          .join("\n");
+        const moreText = count > 5 ? `\n  ... and ${count - 5} more` : "";
+        
+        return {
+          kind: "text",
+          text: `Got it! Your timezone is now ${userTz}.\n\n⚠️ You have ${count} pending reminder(s) scheduled with your old timezone:\n${reminderList}${moreText}\n\nOptions:\n• Type 'reminders' to review all\n• Type 'clear reminders' to delete them all\n• They'll fire at the stored UTC time (may be wrong for you now)`,
+        };
+      }
 
-      return { kind: "text", text: `Got it! Your timezone is now ${validation.data.timeZone}.${reminderWarning}` };
+      return { kind: "text", text: `Got it! Your timezone is now ${validation.data.timeZone}.` };
+    }
+
+    if (lower === "clear reminders") {
+      const pending = await listPendingReminders(accountId, 100);
+      if (!pending.ok) return { kind: "text", text: `⚠ ${pending.error}` };
+      if (pending.data.length === 0) return { kind: "text", text: "No pending reminders to clear." };
+
+      let deleted = 0;
+      for (const r of pending.data) {
+        const result = await deleteReminder(accountId, r.id);
+        if (result.ok) deleted++;
+      }
+
+      return { kind: "text", text: `Cleared ${deleted} reminder(s).` };
     }
 
     if (lower === "digest off") {
@@ -398,7 +428,14 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
 
       if (inMatch) {
         message = remaining.slice(0, inMatch.index).trim();
-        when = parseWhen(`in ${inMatch[1]!.trim()}`);
+        const timeStr = inMatch[1]!.trim();
+        
+        // Check for invalid pattern: "in <number>am/pm"
+        if (/^\d{1,2}\s*(am|pm)$/i.test(timeStr)) {
+          return { kind: "text", text: `Did you mean "at ${timeStr}" instead of "in ${timeStr}"? Use "in" for durations (10m, 2h) or "at" for clock times.` };
+        }
+        
+        when = parseWhen(`in ${timeStr}`);
       } else if (atMatch) {
         message = remaining.slice(0, atMatch.index).trim();
         when = parseWhen(`at ${atMatch[1]!.trim()}`, await getAccountTimeZone(accountId));
@@ -408,11 +445,20 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
         const validation = safeValidate(createReminderSchema, { message, remindAt: when, recurrence });
         if (!validation.ok) return { kind: "text", text: `Hmm, couldn't schedule that: ${validation.error}` };
 
+        const userTz = await getAccountTimeZone(accountId);
+        
+        // Prompt for timezone if using clock time and still on UTC
+        if (atMatch && userTz === "UTC") {
+          return {
+            kind: "text",
+            text: `⚠️ Your timezone is set to UTC. Please set your timezone first so I schedule this correctly:\n\nExamples:\n• timezone Asia/Kolkata (or IST)\n• timezone America/New_York (or EST)\n• timezone Europe/London\n\nThen create your reminder again.`,
+          };
+        }
+
         const result = await createReminder(accountId, validation.data);
         if (!result.ok) return { kind: "text", text: `⚠ ${result.error}` };
         recordUndoableAction(accountId, { kind: "delete_reminder", reminderId: result.data.id });
 
-        const userTz = await getAccountTimeZone(accountId);
         const recurrenceNote = recurrence === "none" ? "" : ` (repeating ${recurrence})`;
         return {
           kind: "text",
@@ -457,7 +503,23 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
 
     if (lower.startsWith("acknowledge ")) {
       const idPrefix = text.slice("acknowledge ".length).trim();
-      if (!idPrefix) return { kind: "text", text: "You'll need the alarm id. Try: acknowledge a1b2c3d4" };
+      
+      // Bulk acknowledge all
+      if (idPrefix === "all") {
+        const pending = await listPendingReminders(accountId, 100);
+        if (!pending.ok) return { kind: "text", text: `⚠ ${pending.error}` };
+        if (pending.data.length === 0) return { kind: "text", text: "No pending reminders to acknowledge." };
+
+        let acknowledged = 0;
+        for (const r of pending.data) {
+          const result = await acknowledgeReminder(accountId, r.id);
+          if (result.ok) acknowledged++;
+        }
+
+        return { kind: "text", text: `Acknowledged ${acknowledged} reminder(s).` };
+      }
+      
+      if (!idPrefix) return { kind: "text", text: "You'll need the alarm id. Try: acknowledge a1b2c3d4 or acknowledge all" };
 
       const pending = await listPendingReminders(accountId, 50);
       if (!pending.ok) return { kind: "text", text: `⚠ ${pending.error}` };
