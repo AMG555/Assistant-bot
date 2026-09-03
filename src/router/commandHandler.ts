@@ -471,15 +471,16 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
         };
       }
       
-      // Complex requests like "5 times with 30m gap" need AI
-      if (rawFull.includes("time") && (rawFull.includes("gap") || rawFull.includes("interval") || /\d+\s*times?/i.test(rawFull))) {
+      // Complex requests like "5 times with 30m gap" - let AI handle if enabled, else show hint
+      const isComplexMultiReminder = rawFull.includes("time") && (rawFull.includes("gap") || rawFull.includes("interval") || /\d+\s*times?/i.test(rawFull));
+      if (isComplexMultiReminder && !(await isAiEnabledForAccount(accountId))) {
         return {
           kind: "text",
           text: `For multiple reminders, try using AI: send "ai on" first, then say it naturally like "remind me to send bday wishes at 12pm, 12:30pm, 1pm, 1:30pm, and 2pm today".`,
         };
       }
       
-      // parsing failed — fall through to NL
+      // parsing failed — fall through to NL (which handles AI if enabled)
     }
 
     if (lower.startsWith("alarm ")) {
