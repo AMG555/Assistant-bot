@@ -422,6 +422,7 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
 
       const inMatch = remaining.match(/\bin\s+(.+)$/i);
       const atMatch = remaining.match(/\bat\s+(.+)$/i);
+      const withMatch = remaining.match(/\bwith\s+(.+)$/i); // "with 12pm" = "at 12pm"
 
       let message: string | undefined;
       let when: Date | null | undefined;
@@ -439,6 +440,10 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
       } else if (atMatch) {
         message = remaining.slice(0, atMatch.index).trim();
         when = parseWhen(`at ${atMatch[1]!.trim()}`, await getAccountTimeZone(accountId));
+      } else if (withMatch) {
+        // "with" is often used like "at" in natural speech
+        message = remaining.slice(0, withMatch.index).trim();
+        when = parseWhen(`at ${withMatch[1]!.trim()}`, await getAccountTimeZone(accountId));
       }
 
       if (when && message) {
@@ -448,7 +453,7 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
         const userTz = await getAccountTimeZone(accountId);
         
         // Prompt for timezone if using clock time and still on UTC
-        if (atMatch && userTz === "UTC") {
+        if ((atMatch || withMatch) && userTz === "UTC") {
           return {
             kind: "text",
             text: `⚠️ Your timezone is set to UTC. Please set your timezone first so I schedule this correctly:\n\nExamples:\n• timezone Asia/Kolkata (or IST)\n• timezone America/New_York (or EST)\n• timezone Europe/London\n\nThen create your reminder again.`,
@@ -465,6 +470,15 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
           text: `Got it! I'll remind you ${friendlyTime(when.toISOString(), userTz)}${recurrenceNote}. Send "undo" within a few minutes to cancel it.`,
         };
       }
+      
+      // Complex requests like "5 times with 30m gap" need AI
+      if (rawFull.includes("time") && (rawFull.includes("gap") || rawFull.includes("interval") || /\d+\s*times?/i.test(rawFull))) {
+        return {
+          kind: "text",
+          text: `For multiple reminders, try using AI: send "ai on" first, then say it naturally like "remind me to send bday wishes at 12pm, 12:30pm, 1pm, 1:30pm, and 2pm today".`,
+        };
+      }
+      
       // parsing failed — fall through to NL
     }
 
