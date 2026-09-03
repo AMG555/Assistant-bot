@@ -99,7 +99,7 @@ const TOOLS: Groq.Chat.Completions.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "create_reminder",
-      description: "Schedule a reminder when the user wants to be reminded of something at a specific future time. For multiple reminders with intervals (e.g., '5 times with 30m gap'), call this function multiple times with different remindAtIso values. Always calculate remindAtIso based on the user's current local time and timezone.",
+      description: "Schedule a reminder when the user wants to be reminded of something at a specific future time. IMPORTANT: For multiple reminders (e.g., '5 times with 30m gap'), you MUST call this function once for EACH reminder time, not just once. Example: if user says '5 reminders starting at 12pm with 30m intervals', call this function 5 times: once for 12:00pm, once for 12:30pm, once for 1:00pm, once for 1:30pm, and once for 2:00pm. Always calculate remindAtIso based on the user's current local time and timezone.",
       parameters: {
         type: "object",
         properties: {
@@ -183,7 +183,7 @@ const SYSTEM_PROMPT = [
   "11. For reminders: 'in' requires a duration (10m, 2h, 1d), NOT a clock time. 'Remind me in 5am' means 'at 5am', not 'in 5 hours'. Parse 'in <number>am/pm' as 'at <number>am/pm'.",
   "12. When user says just 'remind me in <time>' without a message, ask what to remind them about. Don't create a reminder with message 'Reminder' or 'remind me'.",
   "13. Context matters: 'timezone checkup' in a reminder context (e.g. 'remind me timezone checkup') means the reminder message is 'timezone checkup', NOT a timezone change command. Only invoke set_timezone when the user explicitly says 'timezone <name>' without reminder context.",
-  "14. MULTIPLE REMINDERS: When user wants multiple reminders (e.g., '5 times with 30m gap', '3 reminders every hour'), call create_reminder multiple times with different remindAtIso timestamps. Calculate each timestamp based on the requested interval.",
+  "14. MULTIPLE REMINDERS: When user wants multiple reminders (e.g., '5 times with 30m gap', '3 reminders every hour', 'at 12pm, 12:30pm, 1pm'), you MUST call create_reminder once for EACH time. Example: '5 times starting 12pm with 30m gap' = call create_reminder at 12:00pm, then 12:30pm, then 1:00pm, then 1:30pm, then 2:00pm (5 separate calls). Do NOT create just one reminder - create ALL requested reminders.",
   "",
   "For recurring things: if the user says 'every day'/'every week'/'every month' or a specific day like 'every 10th'/'every 1st'/'every 15th', repeat monthly. Set remindAtIso to the next occurrence of that day. Otherwise one-time.",
   "For alarms: use when the user says 'alarm', 'alarm me', 'wake me up', or anything urgent. Alarms repeat until acknowledged.",
