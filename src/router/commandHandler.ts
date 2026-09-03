@@ -835,7 +835,11 @@ export async function handleCommand(cmd: IncomingCommand): Promise<BotReply> {
     ];
     const hasScheduleKeyword = ["schedule", "agenda"].some((k) => lower.includes(k));
     const todayWithContext = lower.includes("today") && ["have", "on", "due", "plan", "my", "what", "show", "tell", "about", "for", "anything", "upcoming", "going", "happening"].some((w) => lower.includes(w));
-    if (schedulePatterns.some((p) => p.test(lower)) || hasScheduleKeyword || todayWithContext) {
+    
+    // Don't treat reminder/task/alarm creation as schedule query
+    const isCreationCommand = lower.startsWith("remind me") || lower.startsWith("task ") || lower.startsWith("alarm ") || lower.startsWith("note ");
+    
+    if (!isCreationCommand && (schedulePatterns.some((p) => p.test(lower)) || hasScheduleKeyword || todayWithContext)) {
       const timezone = await getAccountTimeZone(accountId);
       const content = await buildDigestContent(accountId, timezone);
       if (!content.ok) return { kind: "text", text: `⚠ ${content.error}` };
